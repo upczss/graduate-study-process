@@ -1,0 +1,7 @@
+{
+	"nodes":[
+		{"id":"6c016f062036b0a6","x":-260,"y":60,"width":250,"height":60,"type":"text","text":"我要好好学习"},
+		{"id":"bc5443c975d98ae0","x":0,"y":0,"width":740,"height":400,"type":"file","file":"学习笔记/obsidian使用技巧.md"}
+	],
+	"edges":[]
+}
