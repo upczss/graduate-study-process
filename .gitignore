@@ -1,0 +1,11 @@
+# OneDrive temporary transfer directories
+.tmp.driveupload/
+.tmp.drivedownload/
+
+# Python-generated caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local backups of nested Git metadata
+.git-metadata-backup/
