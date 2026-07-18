@@ -913,3 +913,71 @@ git log --graph --oneline --decorate --all(用于显示分支图)
 
 ### 如何解决合并冲突
 当两个branch同时改了同一个文件的同一行代码的时候此时git会发生合并冲突，此时需要我们进行手动合并
+
+# 上传
+以后在 Git Bash 上传整个 Obsidian 文件夹，按下面操作即可。
+
+第一次先进入仓库目录：
+
+```
+cd "/c/Users/zss/OneDrive/Desktop/obsidian"
+```
+
+查看有哪些修改：
+
+```
+git status
+```
+
+把所有新增、修改和删除暂存起来：
+
+```
+git add .
+```
+
+创建一次提交，双引号里写本次修改内容：
+
+```
+git commit -m "更新学习笔记"
+```
+
+上传到 GitHub：
+
+```
+git push
+```
+
+完整流程就是：
+
+```
+cd "/c/Users/zss/OneDrive/Desktop/obsidian"
+git status
+git add .
+git commit -m "更新学习笔记"
+git push
+```
+
+几个常见情况：
+
+- 如果 `git commit` 显示 `nothing to commit`，说明没有新修改，不需要上传。
+- 如果 `git push` 显示 `Everything up-to-date`，说明 GitHub 已是最新状态。
+- 如果换电脑或 GitHub 上先有了新修改，上传前先运行：
+
+```
+git pull --rebase
+```
+
+- 不要再在内部文件夹运行 `git init`，例如不要在 `暑假学习`、`learn-git` 或 `code` 中初始化仓库，否则又会产生嵌套仓库。
+- 始终在最外层的 `obsidian` 文件夹里执行 Git 命令。
+
+你也可以通过下面这条命令确认当前位置是否正确：
+
+```
+git rev-parse --show-toplevel
+```
+
+正确结果应该是：
+
+```
+C:/Users/zss/OneDrive/Desktop/obsidian
+```
