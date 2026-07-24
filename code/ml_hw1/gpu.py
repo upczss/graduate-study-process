@@ -85,7 +85,7 @@ class My_Model(nn.Module):
     def forward(self, x):
         # 将输入x送入搭建好的网络层，返回预测结果
         return self.layers(x)
-    
+##1
 # 参数设置
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 config = {

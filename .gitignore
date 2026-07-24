@@ -9,3 +9,23 @@ __pycache__/
 
 # Local backups of nested Git metadata
 .git-metadata-backup/
+# Machine-learning datasets
+/code/data/
+
+# Training outputs and model weights
+**/runs/
+**/outputs/
+**/outputs_test/
+*.pt
+*.pth
+*.tgz
+*.safetensors
+
+# Kaggle prediction files
+/code/ml_hw7/result.csv
+/code/ml_hw8/prediction.csv
+
+# Temporary files
+/tmp/
+__pycache__/
+*.py[cod]

@@ -14,7 +14,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset, random_split
 # 绘制图像、Tensorboard可视化
 from torch.utils.tensorboard import SummaryWriter
-
+### 1
 def same_seeds(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False

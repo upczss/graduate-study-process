@@ -267,7 +267,7 @@ config = {
 input_dim = 39*concat_nframes#拼接了三帧
 hidden_layers= 3
 hidden_dim = 256
-
+### 1
 # 训练过程
 # 训练函数
 def trainer(train_set, val_set, train_loader, val_loader, config, model, device):
