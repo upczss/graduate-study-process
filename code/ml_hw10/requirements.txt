@@ -1,0 +1,6 @@
+torch
+torchvision
+pytorchcv==0.0.74
+numpy
+pillow
+matplotlib

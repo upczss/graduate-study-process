@@ -1,0 +1,8 @@
+torch
+torchvision
+transformers
+safetensors
+numpy
+pillow
+matplotlib
+lime
