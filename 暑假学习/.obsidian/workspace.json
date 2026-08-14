@@ -20,6 +20,48 @@
               "icon": "lucide-file",
               "title": "Aladdin Persson教学pytorch"
             }
+          },
+          {
+            "id": "2fa58ba94a097116",
+            "type": "leaf",
+            "state": {
+              "type": "webviewer",
+              "state": {
+                "url": "https://web.stanford.edu/class/cs231a/course_notes/01-camera-models.pdf",
+                "title": "01-camera-models.pdf",
+                "mode": "webview"
+              },
+              "icon": "globe-2",
+              "title": "01-camera-models.pdf"
+            }
+          },
+          {
+            "id": "a4d957b28474883e",
+            "type": "leaf",
+            "state": {
+              "type": "webviewer",
+              "state": {
+                "url": "https://arxiv.org/pdf/1506.02640",
+                "title": "1506.02640",
+                "mode": "webview"
+              },
+              "icon": "globe-2",
+              "title": "1506.02640"
+            }
+          },
+          {
+            "id": "60fb02cc44366cf3",
+            "type": "leaf",
+            "state": {
+              "type": "webviewer",
+              "state": {
+                "url": "https://docs.pytorch.org/docs/2.13/generated/torch.nn.Transformer.html",
+                "title": "Transformer — PyTorch 2.13 documentation",
+                "mode": "webview"
+              },
+              "icon": "globe-2",
+              "title": "Transformer — PyTorch 2.13 documentation"
+            }
           }
         ]
       }
@@ -212,42 +254,43 @@
   },
   "active": "b434f4dacf3383ad",
   "lastOpenFiles": [
+    "学习笔记/CS231A.md",
     "学习笔记/Aladdin Persson教学pytorch.md",
-    "学习笔记/李宏毅机器学习作业.md",
-    "图片/Pasted image 20260807003944.png",
+    "图片/Pasted image 20260815020624.png",
+    "图片/Pasted image 20260815020348.png",
+    "图片/Pasted image 20260815020323.png",
+    "图片/Pasted image 20260815020241.png",
+    "图片/Pasted image 20260815020112.png",
     "待办.md",
+    "图片/Pasted image 20260815015739.png",
+    "图片/Pasted image 20260815015727.png",
+    "图片/Pasted image 20260815014511.png",
+    "图片/Pasted image 20260815014450.png",
+    "图片/Pasted image 20260815014401.png",
+    "讲义/lecture3_camera_calibration.pdf",
+    "讲义/未确认 989908.crdownload",
+    "讲义/01-camera-models.pdf",
+    "讲义/未确认 603946.crdownload",
     "学习笔记/入门培训 完全版.md",
-    "学习笔记/CS231N作业.md",
     "学习笔记/CS231N.md",
+    "学习笔记/git&github学习.md",
+    "学习笔记/git的常用指令.md",
+    "desktop.ini",
+    "学习笔记/李宏毅机器学习作业.md",
+    "学习笔记/CS231N作业.md",
     "学习笔记/暑期学习规划-赵树山.md",
     "学习笔记/李宏毅机器学习.md",
     "未命名",
-    "图片/Pasted image 20260804234214.png",
-    "图片/Pasted image 20260804233944.png",
-    "图片/Pasted image 20260804233904.png",
-    "图片/Pasted image 20260804231915.png",
-    "图片/Pasted image 20260804223816.png",
-    "图片/Pasted image 20260804223529.png",
-    "图片/Pasted image 20260804220648.png",
-    "图片/Pasted image 20260804215729.png",
-    "图片/Pasted image 20260804215635.png",
     "学习笔记/PyTorch.md",
     "学习笔记/obsidian使用技巧.md",
     "学习笔记/markdown文件基础.md",
     "学习笔记/markdown常见的语法示例.md",
-    "学习笔记/git的常用指令.md",
-    "学习笔记/git&github学习.md",
     "学习笔记/入门培训 (1).md",
     "讲义/Machine Learning HW10 Adversarial Attack.pdf",
     "讲义/未确认 930724.crdownload",
     "讲义/Machine Learning HW9.pdf",
     "讲义/未确认 603366.crdownload",
-    "desktop.ini",
     "学习笔记/HW8笔记.md",
-    "讲义/Machine Learning HW6.pdf",
-    "讲义/hw7_slides.pdf",
-    "讲义/Machine Learning Homework 8 Anomaly Detection.pdf",
-    "讲义",
     "学习笔记/HW7笔记.md",
     "学习笔记/HW6笔记.md",
     "日记/2026-07-08.md",

@@ -8078,3 +8078,10120 @@ tensorboard --logdir=runs
 SummaryWriter 负责在训练过程中写入指标和模型信息，
 TensorBoard 负责把这些日志转换成直观的曲线、图片和计算图。
 ```
+
+
+# PyTorch 从零实现 LeNet
+
+
+LeNet 是经典的卷积神经网络之一，最早用于手写数字识别。它的结构简单，非常适合理解 CNN 的基本组成：
+
+```
+卷积 → 激活函数 → 池化
+      ↓
+卷积 → 激活函数 → 池化
+      ↓
+展平
+      ↓
+全连接层 → 分类结果
+```
+
+---
+
+## 1. LeNet 网络结构
+
+下面使用的是更现代化的 LeNet 风格实现：
+
+```
+输入图片：1 × 32 × 32
+    ↓
+卷积层：1 → 6，卷积核 5×5
+    ↓
+ReLU
+    ↓
+最大池化：2×2
+    ↓
+卷积层：6 → 16，卷积核 5×5
+    ↓
+ReLU
+    ↓
+最大池化：2×2
+    ↓
+展平：16 × 5 × 5 = 400
+    ↓
+全连接层：400 → 120
+    ↓
+全连接层：120 → 84
+    ↓
+全连接层：84 → 10
+```
+
+原始 LeNet-5 使用 `Tanh` 和平均池化；这里使用更常见的 `ReLU` 和最大池化。
+
+---
+
+## 2. 图像尺寸变化
+
+LeNet 默认接收形状为：
+
+```
+(batch_size, 1, 32, 32)
+```
+
+其中：
+
+```
+batch_size：一个批次中的图片数量
+1：灰度图片通道数
+32 × 32：图片高度和宽度
+```
+
+尺寸变化过程：
+
+```
+输入                    (batch, 1, 32, 32)
+
+Conv1：卷积核 5×5      (batch, 6, 28, 28)
+
+MaxPool：2×2           (batch, 6, 14, 14)
+
+Conv2：卷积核 5×5      (batch, 16, 10, 10)
+
+MaxPool：2×2           (batch, 16, 5, 5)
+
+Flatten                (batch, 16 × 5 × 5)
+
+全连接层               (batch, 120)
+
+全连接层               (batch, 84)
+
+输出层                 (batch, 10)
+```
+
+因为第二次池化后是：
+
+```
+16 × 5 × 5
+```
+
+所以第一个全连接层的输入数量为：
+
+```
+16 * 5 * 5  # 400
+```
+
+---
+
+## 3. LeNet 的完整实现
+
+```
+import torch  # 导入 PyTorch
+import torch.nn as nn  # 导入神经网络模块
+
+
+class LeNet(nn.Module):  # 定义 LeNet 网络
+    def __init__(self, num_classes=10):
+        super(LeNet, self).__init__()  # 初始化 nn.Module 父类
+
+        self.relu = nn.ReLU()  # 创建 ReLU 激活函数
+
+        self.pool = nn.MaxPool2d(
+            kernel_size=2,
+            stride=2,
+        )  # 创建 2×2 最大池化层，步长为 2
+
+        self.conv1 = nn.Conv2d(
+            in_channels=1,
+            out_channels=6,
+            kernel_size=5,
+            stride=1,
+            padding=0,
+        )  # 第一层卷积：(batch, 1, 32, 32) → (batch, 6, 28, 28)
+
+        self.conv2 = nn.Conv2d(
+            in_channels=6,
+            out_channels=16,
+            kernel_size=5,
+            stride=1,
+            padding=0,
+        )  # 第二层卷积：(batch, 6, 14, 14) → (batch, 16, 10, 10)
+
+        self.fc1 = nn.Linear(
+            16 * 5 * 5,
+            120,
+        )  # 第一层全连接层：(batch, 400) → (batch, 120)
+
+        self.fc2 = nn.Linear(
+            120,
+            84,
+        )  # 第二层全连接层：(batch, 120) → (batch, 84)
+
+        self.fc3 = nn.Linear(
+            84,
+            num_classes,
+        )  # 输出层：(batch, 84) → (batch, 10)
+
+    def forward(self, x):
+        x = self.conv1(x)  # 执行第一次卷积
+        x = self.relu(x)  # 使用 ReLU 激活
+        x = self.pool(x)  # 执行第一次最大池化
+
+        x = self.conv2(x)  # 执行第二次卷积
+        x = self.relu(x)  # 使用 ReLU 激活
+        x = self.pool(x)  # 执行第二次最大池化
+
+        x = torch.flatten(
+            x,
+            start_dim=1,
+        )  # 保留批次维度，将 (batch, 16, 5, 5) 展平为 (batch, 400)
+
+        x = self.fc1(x)  # 通过第一层全连接层
+        x = self.relu(x)  # 使用 ReLU 激活
+
+        x = self.fc2(x)  # 通过第二层全连接层
+        x = self.relu(x)  # 使用 ReLU 激活
+
+        x = self.fc3(x)  # 得到 10 个类别的原始分数 logits
+        return x  # 返回模型输出
+```
+
+---
+
+## 4. 测试模型输出形状
+
+```
+model = LeNet()  # 创建 LeNet 模型
+
+x = torch.randn(
+    64,
+    1,
+    32,
+    32,
+)  # 创建 64 张随机灰度图片
+
+output = model(x)  # 将图片输入模型
+
+print(output.shape)  # 输出 torch.Size([64, 10])
+```
+
+输出形状：
+
+```
+(64, 10)
+```
+
+含义是：
+
+```
+64：当前批次中有 64 张图片
+10：每张图片对应 10 个类别分数
+```
+
+对于 MNIST，10 个类别分别代表：
+
+```
+0、1、2、3、4、5、6、7、8、9
+```
+
+---
+
+## 5. 为什么需要展平？
+
+卷积层和池化层输出的是四维特征图：
+
+```
+(batch_size, channels, height, width)
+```
+
+但全连接层 `nn.Linear` 需要二维输入：
+
+```
+(batch_size, features)
+```
+
+因此需要执行：
+
+```
+x = torch.flatten(
+    x,
+    start_dim=1,
+)
+```
+
+形状变化：
+
+```
+(batch, 16, 5, 5)
+        ↓
+(batch, 400)
+```
+
+也可以写成：
+
+```
+x = x.reshape(
+    x.shape[0],
+    -1,
+)  # 保留 batch 维度，自动展开其余维度
+```
+
+---
+
+## 6. 使用 MNIST 数据集
+
+MNIST 原始图片尺寸为：
+
+```
+1 × 28 × 28
+```
+
+而上面的 LeNet 代码假设输入尺寸是：
+
+```
+1 × 32 × 32
+```
+
+因此需要在数据预处理中将 MNIST 图片缩放到 `32×32`：
+
+```
+from torchvision import datasets, transforms  # 导入数据集和图片转换工具
+
+
+transform = transforms.Compose([
+    transforms.Resize((32, 32)),  # 将 MNIST 图片从 28×28 调整为 32×32
+    transforms.ToTensor(),  # 将图片转换为 PyTorch 张量
+])
+```
+
+加载训练集：
+
+```
+train_dataset = datasets.MNIST(
+    root="dataset/",
+    train=True,
+    transform=transform,
+    download=True,
+)  # 创建训练数据集
+```
+
+加载测试集：
+
+```
+test_dataset = datasets.MNIST(
+    root="dataset/",
+    train=False,
+    transform=transform,
+    download=True,
+)  # 创建测试数据集
+```
+
+创建数据加载器：
+
+```
+from torch.utils.data import DataLoader  # 导入 DataLoader
+
+
+train_loader = DataLoader(
+    train_dataset,
+    batch_size=64,
+    shuffle=True,
+)  # 创建训练数据加载器
+
+test_loader = DataLoader(
+    test_dataset,
+    batch_size=64,
+    shuffle=False,
+)  # 创建测试数据加载器
+```
+
+---
+
+## 7. 训练 LeNet
+
+```
+import torch.optim as optim  # 导入优化器模块
+
+
+device = torch.device(
+    "cuda" if torch.cuda.is_available() else "cpu"
+)  # 选择 GPU 或 CPU
+
+model = LeNet().to(device)  # 创建模型并移动到指定设备
+
+criterion = nn.CrossEntropyLoss()  # 创建多分类交叉熵损失函数
+
+optimizer = optim.Adam(
+    model.parameters(),
+    lr=0.001,
+)  # 创建 Adam 优化器
+```
+
+训练循环：
+
+```
+num_epochs = 5  # 设置训练轮数
+
+for epoch in range(num_epochs):
+    model.train()  # 切换到训练模式
+    total_loss = 0.0  # 累加当前轮次的损失
+
+    for images, labels in train_loader:
+        images = images.to(device)  # 将图片移动到指定设备
+        labels = labels.to(device)  # 将标签移动到指定设备
+
+        scores = model(images)  # 前向传播，输出形状为 (batch_size, 10)
+        loss = criterion(scores, labels)  # 计算预测结果与真实标签之间的损失
+
+        optimizer.zero_grad()  # 清除旧梯度
+        loss.backward()  # 反向传播，计算梯度
+        optimizer.step()  # 更新模型参数
+
+        total_loss += loss.item()  # 累加当前批次损失
+
+    average_loss = total_loss / len(train_loader)  # 计算平均损失
+
+    print(
+        f"Epoch [{epoch + 1}/{num_epochs}], "
+        f"Loss: {average_loss:.4f}"
+    )  # 输出当前训练结果
+```
+
+模型输出的是 logits，因此不要在 `forward()` 中手动添加 Softmax：
+
+```
+x = self.fc3(x)  # 直接输出原始类别分数
+```
+
+因为：
+
+```
+nn.CrossEntropyLoss()
+```
+
+已经包含所需的 Softmax 相关计算。
+
+---
+
+## 8. 计算测试集准确率
+
+```
+def check_accuracy(loader, model):
+    num_correct = 0  # 记录预测正确的图片数量
+    num_samples = 0  # 记录总图片数量
+
+    model.eval()  # 切换到评估模式
+
+    with torch.inference_mode():  # 评估时关闭梯度计算
+        for images, labels in loader:
+            images = images.to(device)  # 将图片移动到指定设备
+            labels = labels.to(device)  # 将标签移动到指定设备
+
+            scores = model(images)  # 获取模型输出
+            predictions = scores.argmax(dim=1)  # 获取每张图片分数最高的类别
+
+            num_correct += (
+                predictions == labels
+            ).sum().item()  # 累加正确预测数量
+
+            num_samples += labels.size(0)  # 累加当前批次图片数量
+
+    accuracy = num_correct / num_samples * 100  # 计算百分比准确率
+    return accuracy  # 返回准确率
+```
+
+调用：
+
+```
+train_accuracy = check_accuracy(
+    train_loader,
+    model,
+)  # 计算训练集准确率
+
+test_accuracy = check_accuracy(
+    test_loader,
+    model,
+)  # 计算测试集准确率
+
+print(f"Train Accuracy: {train_accuracy:.2f}%")
+print(f"Test Accuracy: {test_accuracy:.2f}%")
+```
+
+---
+
+## 9. LeNet 的核心知识点
+
+### 卷积层提取特征
+
+```
+self.conv1 = nn.Conv2d(1, 6, kernel_size=5)
+```
+
+第一层接收单通道灰度图片，输出 `6` 个特征图。
+
+```
+self.conv2 = nn.Conv2d(6, 16, kernel_size=5)
+```
+
+第二层从第一层提取的特征中，进一步学习更复杂的模式。
+
+### ReLU 引入非线性
+
+```
+x = self.relu(x)
+```
+
+ReLU 会将负数变为 `0`，正数保持不变：
+
+```
+ReLU(x) = max(0, x)
+```
+
+### 最大池化缩小特征图
+
+```
+x = self.pool(x)
+```
+
+池化层使高度和宽度减半：
+
+```
+28 × 28 → 14 × 14
+10 × 10 → 5 × 5
+```
+
+### 全连接层完成分类
+
+```
+self.fc3 = nn.Linear(84, 10)
+```
+
+最后输出 `10` 个类别分数，分别对应数字 `0～9`。
+
+---
+
+## 10. 常见错误
+
+### 输入图片尺寸错误
+
+上面定义的 `fc1` 是：
+
+```
+self.fc1 = nn.Linear(16 * 5 * 5, 120)
+```
+
+因此它要求卷积部分最终输出：
+
+```
+(batch, 16, 5, 5)
+```
+
+如果直接输入 `28×28` 的 MNIST 图片，最终会变为：
+
+```
+(batch, 16, 4, 4)
+```
+
+这时 `fc1` 的输入大小不匹配。
+
+解决方法：
+
+```
+transforms.Resize((32, 32))
+```
+
+或者将全连接层修改为：
+
+```
+self.fc1 = nn.Linear(16 * 4 * 4, 120)
+```
+
+### 忘记展平
+
+错误写法：
+
+```
+x = self.pool(x)
+x = self.fc1(x)  # 错误：fc1 不能直接接收四维特征图
+```
+
+正确写法：
+
+```
+x = self.pool(x)
+x = torch.flatten(x, start_dim=1)
+x = self.fc1(x)
+```
+
+### 提前使用 Softmax
+
+错误写法：
+
+```
+x = torch.softmax(self.fc3(x), dim=1)
+```
+
+正确写法：
+
+```
+x = self.fc3(x)  # 返回 logits
+```
+
+训练时搭配：
+
+```
+criterion = nn.CrossEntropyLoss()
+```
+
+---
+
+## 11. 重点总结
+
+LeNet 的整体流程：
+
+```
+输入图片
+(1, 32, 32)
+     ↓
+Conv2d：1 → 6
+     ↓
+ReLU + MaxPool
+     ↓
+Conv2d：6 → 16
+     ↓
+ReLU + MaxPool
+     ↓
+Flatten
+(16 × 5 × 5 = 400)
+     ↓
+Linear：400 → 120
+     ↓
+Linear：120 → 84
+     ↓
+Linear：84 → 10
+     ↓
+输出 10 个类别的 logits
+```
+
+最核心的 `forward()`：
+
+```
+def forward(self, x):
+    x = self.pool(self.relu(self.conv1(x)))  # 第一次卷积、激活和池化
+    x = self.pool(self.relu(self.conv2(x)))  # 第二次卷积、激活和池化
+    x = torch.flatten(x, start_dim=1)  # 展平卷积特征
+    x = self.relu(self.fc1(x))  # 第一层全连接层
+    x = self.relu(self.fc2(x))  # 第二层全连接层
+    x = self.fc3(x)  # 输出类别 logits
+    return x
+```
+
+一总结：
+
+```
+LeNet 先通过卷积和池化提取图片特征，
+再将特征展平，通过全连接层输出最终的分类结果。
+```
+
+
+
+# Pytorch VGG implementation from scratch
+
+
+## 1. 什么是 VGG？
+
+VGG（Visual Geometry Group Network）是由牛津大学提出的一种经典卷积神经网络结构。
+
+它的核心思想：
+
+- 使用大量 **3×3 小卷积核**
+- 使用多个卷积层堆叠增加网络深度
+- 使用最大池化逐渐降低特征图尺寸
+- 最后通过全连接层完成分类任务
+
+
+VGG 的特点：
+
+```
+简单卷积块
+      ↓
+增加网络深度
+      ↓
+提取更加复杂的特征
+      ↓
+分类预测
+
+```
+
+
+相比 AlexNet，VGG 不再使用较大的卷积核，而是：
+
+```
+AlexNet:
+11×11 convolution
+
+VGG:
+3×3 convolution + 3×3 convolution
+
+```
+
+
+多个小卷积核可以获得相同感受野，同时参数更少。
+
+
+---
+
+## 2. VGG 网络结构
+
+
+经典 VGG-16 的结构：
+
+```
+Input Image
+    |
+    ↓
+Conv Block 1
+    |
+    ↓
+Conv Block 2
+    |
+    ↓
+Conv Block 3
+    |
+    ↓
+Conv Block 4
+    |
+    ↓
+Conv Block 5
+    |
+    ↓
+Fully Connected Layers
+    |
+    ↓
+Classification
+
+```
+
+
+每个卷积块主要由：
+
+```
+Conv2d
+    ↓
+ReLU
+    ↓
+Conv2d
+    ↓
+ReLU
+    ↓
+MaxPool
+
+```
+
+
+组成。
+
+
+
+---
+
+## 3. VGG 配置方式
+
+
+为了方便实现不同版本 VGG，通常使用字典保存网络结构。
+
+
+例如：
+
+```python
+VGG_types = {
+
+    "VGG11": [
+        64,
+        "M",
+        128,
+        "M",
+        256,
+        256,
+        "M",
+        512,
+        512,
+        "M",
+        512,
+        512,
+        "M",
+    ],
+
+
+    "VGG13": [
+        64,
+        64,
+        "M",
+        128,
+        128,
+        "M",
+        256,
+        256,
+        "M",
+        512,
+        512,
+        "M",
+        512,
+        512,
+        "M",
+    ]
+
+}
+
+```
+
+
+其中：
+
+```
+数字:
+    表示 Conv2d 输出通道数量
+
+
+"M":
+    表示 MaxPool2d
+
+```
+
+
+例如：
+
+```
+64
+↓
+Conv2d 输出 64 个 feature maps
+
+
+"M"
+↓
+执行一次最大池化
+
+```
+
+
+
+---
+
+## 4. 创建卷积层
+
+
+VGG 中每一个卷积层结构：
+
+```
+Conv2d
+    ↓
+BatchNorm
+    ↓
+ReLU
+
+```
+
+
+代码：
+
+```python
+import torch
+import torch.nn as nn
+
+
+
+class CNNBlock(nn.Module):
+
+    def __init__(self, in_channels, out_channels):
+
+        super(CNNBlock, self).__init__()
+
+
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+        )
+
+
+        self.batchnorm = nn.BatchNorm2d(
+            out_channels
+        )
+
+
+        self.relu = nn.ReLU()
+
+
+    def forward(self, x):
+
+        x = self.conv(x)
+
+        x = self.batchnorm(x)
+
+        x = self.relu(x)
+
+        return x
+
+```
+
+
+参数解释：
+
+```
+kernel_size=3
+
+表示使用 3×3 卷积核
+
+
+stride=1
+
+表示卷积移动一步
+
+
+padding=1
+
+保持输入输出尺寸一致
+
+```
+
+
+例如：
+
+```
+Input:
+
+32×32
+
+
+经过:
+
+3×3 Conv
+padding=1
+
+
+Output:
+
+32×32
+
+```
+
+
+
+---
+
+## 5. 从配置列表创建 VGG 网络
+
+
+通过循环读取配置：
+
+```python
+class VGG(nn.Module):
+
+    def __init__(self, in_channels=3, num_classes=1000):
+
+        super(VGG, self).__init__()
+
+
+        self.in_channels = in_channels
+
+
+        self.conv_layers = self.create_conv_layers(
+            VGG_types["VGG16"]
+        )
+
+
+        self.fcs = nn.Sequential(
+
+            nn.Linear(
+                512 * 7 * 7,
+                4096
+            ),
+
+            nn.ReLU(),
+
+
+            nn.Dropout(0.5),
+
+
+            nn.Linear(
+                4096,
+                4096
+            ),
+
+            nn.ReLU(),
+
+
+            nn.Dropout(0.5),
+
+
+            nn.Linear(
+                4096,
+                num_classes
+            )
+
+        )
+
+
+```
+
+
+这里：
+
+```
+512 * 7 * 7
+
+表示经过卷积层之后 feature map 的大小
+
+
+512:
+
+最后一个卷积层输出通道
+
+
+7×7:
+
+最后空间尺寸
+
+```
+
+
+
+---
+
+## 6. 创建卷积部分
+
+
+代码：
+
+```python
+def create_conv_layers(self, architecture):
+
+    layers = []
+
+
+    in_channels = self.in_channels
+
+
+    for x in architecture:
+
+
+        if type(x) == int:
+
+
+            layers.append(
+
+                CNNBlock(
+                    in_channels,
+                    x
+                )
+
+            )
+
+
+            in_channels = x
+
+
+
+        elif x == "M":
+
+
+            layers.append(
+
+                nn.MaxPool2d(
+                    kernel_size=2,
+                    stride=2
+                )
+
+            )
+
+
+    return nn.Sequential(*layers)
+
+```
+
+
+逻辑：
+
+```
+遍历配置列表
+
+        |
+        ↓
+
+遇到数字
+
+        |
+        ↓
+
+添加 Conv Block
+
+
+遇到 "M"
+
+        |
+        ↓
+
+添加 MaxPool
+
+```
+
+
+
+---
+
+## 7. Forward 前向传播
+
+
+VGG 前向过程：
+
+```python
+def forward(self, x):
+
+
+    x = self.conv_layers(x)
+
+
+    x = x.reshape(
+        x.shape[0],
+        -1
+    )
+
+
+    x = self.fcs(x)
+
+
+    return x
+
+```
+
+
+其中：
+
+```python
+x.reshape(
+    x.shape[0],
+    -1
+)
+
+```
+
+
+作用：
+
+将卷积输出的 feature map 展平成全连接层输入。
+
+
+例如：
+
+```
+Before:
+
+(batch,512,7,7)
+
+
+After:
+
+(batch,25088)
+
+```
+
+
+
+---
+
+## 8. 创建 VGG16
+
+
+```python
+def test():
+
+    device = torch.device(
+        "cuda" if torch.cuda.is_available()
+        else "cpu"
+    )
+
+
+    model = VGG(
+        in_channels=3,
+        num_classes=1000
+    ).to(device)
+
+
+    x = torch.randn(
+        1,
+        3,
+        224,
+        224
+    ).to(device)
+
+
+    print(model(x).shape)
+
+
+
+test()
+
+```
+
+
+输入：
+
+```
+Batch Size = 1
+
+Channels = 3
+
+Height = 224
+
+Width = 224
+
+```
+
+
+输出：
+
+```
+torch.Size([1,1000])
+
+```
+
+
+表示：
+
+```
+模型预测 1000 个 ImageNet 类别
+
+```
+
+
+
+---
+
+## 9. VGG 网络完整流程
+
+
+```
+Input Image
+    |
+    ↓
+Conv3×3
+    |
+    ↓
+BatchNorm
+    |
+    ↓
+ReLU
+    |
+    ↓
+Conv3×3
+    |
+    ↓
+MaxPool
+    |
+    ↓
+重复多个卷积 Block
+    |
+    ↓
+Flatten
+    |
+    ↓
+Fully Connected
+    |
+    ↓
+Class Scores
+
+```
+
+
+
+---
+
+## 10. VGG 和现代网络区别
+
+
+## VGG
+
+优点：
+
+- 结构简单
+- 容易理解
+- 奠定 CNN 深度网络基础
+
+
+缺点：
+
+- 参数量巨大
+- 计算量高
+- 训练速度慢
+
+
+
+## ResNet
+
+
+ResNet 使用：
+
+```
+Residual Connection
+
+```
+
+
+解决深层网络训练困难问题。
+
+
+因此：
+
+```
+VGG:
+
+简单堆叠卷积
+
+
+ResNet:
+
+卷积 + Shortcut
+
+```
+
+
+
+---
+
+## 11. 总结
+
+
+VGG 从零实现核心步骤：
+
+```
+1. 使用列表保存网络结构
+
+        ↓
+
+2. 根据配置创建 Conv Block
+
+        ↓
+
+3. 添加 MaxPool
+
+        ↓
+
+4. Flatten feature map
+
+        ↓
+
+5. 使用 Fully Connected 分类
+
+```
+
+
+核心代码：
+
+```python
+model = VGG(
+    in_channels=3,
+    num_classes=1000
+)
+
+```
+
+
+VGG 的核心思想：
+
+```
+小卷积核
++
+更多卷积层
++
+逐渐增加 channel
+
+↓
+
+学习更加复杂的视觉特征
+
+```
+
+
+# PyTorch 从零实现 GoogLeNet / InceptionNet
+
+GoogLeNet（也称 Inception v1）是 2014 年提出的经典 CNN。它最重要的特点是使用 Inception 模块：让不同尺寸的卷积在同一层中并行提取特征，再将结果拼接起来。原始 GoogLeNet 有约 22 层，并在 ILSVRC 2014 中取得了很好的效果。[原始论文](https://arxiv.org/abs/1409.4842)
+
+---
+
+## 1. Inception 模块的核心思想
+
+传统 CNN 在一层中通常只能选择一种卷积核，例如只使用 `3×3` 卷积。
+
+Inception 模块同时使用多条并行分支：
+
+```
+输入特征图
+    ├── 1×1 卷积
+    ├── 1×1 卷积 → 3×3 卷积
+    ├── 1×1 卷积 → 5×5 卷积
+    └── 3×3 最大池化 → 1×1 卷积
+                    ↓
+            按通道维度拼接
+```
+
+不同分支关注不同尺度的信息：
+
+```
+1×1 卷积：通道信息、局部特征
+3×3 卷积：中等范围特征
+5×5 卷积：更大范围特征
+池化分支：保留显著特征
+```
+
+---
+
+## 2. 为什么需要 `1×1` 卷积？
+
+`1×1` 卷积不会改变图片的高度和宽度，但可以改变通道数。
+
+例如：
+
+```
+输入：(batch, 192, 28, 28)
+
+1×1 卷积：192 → 16
+
+输出：(batch, 16, 28, 28)
+```
+
+它主要有两个作用：
+
+```
+减少通道数，从而减少后续 3×3 或 5×5 卷积的计算量
+引入额外的非线性，提高模型表达能力
+```
+
+例如，不先降维时：
+
+```
+192 通道 → 5×5 卷积 → 32 通道
+```
+
+先使用 `1×1` 卷积降维后：
+
+```
+192 通道 → 1×1 卷积变为 16 通道 → 5×5 卷积 → 32 通道
+```
+
+后者需要的参数和计算量更少。
+
+---
+
+## 3. 卷积基础模块
+
+GoogLeNet 中经常重复使用：
+
+```
+卷积 → BatchNorm → ReLU
+```
+
+因此可以封装成一个模块：
+
+```
+import torch  # 导入 PyTorch
+import torch.nn as nn  # 导入神经网络模块
+
+
+class ConvBlock(nn.Module):  # 定义卷积基础模块
+    def __init__(self, in_channels, out_channels, **kwargs):
+        super(ConvBlock, self).__init__()  # 初始化 nn.Module 父类
+
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            bias=False,
+            **kwargs,
+        )  # 创建卷积层；后面有 BatchNorm，因此关闭卷积 bias
+
+        self.batchnorm = nn.BatchNorm2d(
+            out_channels
+        )  # 对每个输出通道进行批量归一化
+
+        self.relu = nn.ReLU()  # 创建 ReLU 激活函数
+
+    def forward(self, x):
+        x = self.conv(x)  # 执行卷积
+        x = self.batchnorm(x)  # 执行 BatchNorm
+        x = self.relu(x)  # 使用 ReLU 激活函数
+        return x  # 返回处理后的特征图
+```
+
+---
+
+## 4. 实现 Inception 模块
+
+```
+class InceptionBlock(nn.Module):  # 定义 Inception 模块
+    def __init__(
+        self,
+        in_channels,
+        out_1x1,
+        red_3x3,
+        out_3x3,
+        red_5x5,
+        out_5x5,
+        out_1x1pool,
+    ):
+        super(InceptionBlock, self).__init__()  # 初始化父类
+
+        self.branch1 = ConvBlock(
+            in_channels,
+            out_1x1,
+            kernel_size=1,
+        )  # 分支一：直接进行 1×1 卷积
+
+        self.branch2 = nn.Sequential(
+            ConvBlock(
+                in_channels,
+                red_3x3,
+                kernel_size=1,
+            ),  # 先通过 1×1 卷积减少通道数
+
+            ConvBlock(
+                red_3x3,
+                out_3x3,
+                kernel_size=3,
+                padding=1,
+            ),  # 再通过 3×3 卷积提取特征
+        )
+
+        self.branch3 = nn.Sequential(
+            ConvBlock(
+                in_channels,
+                red_5x5,
+                kernel_size=1,
+            ),  # 先通过 1×1 卷积减少通道数
+
+            ConvBlock(
+                red_5x5,
+                out_5x5,
+                kernel_size=5,
+                padding=2,
+            ),  # 再通过 5×5 卷积提取更大范围的特征
+        )
+
+        self.branch4 = nn.Sequential(
+            nn.MaxPool2d(
+                kernel_size=3,
+                stride=1,
+                padding=1,
+            ),  # 池化后保持高度和宽度不变
+
+            ConvBlock(
+                in_channels,
+                out_1x1pool,
+                kernel_size=1,
+            ),  # 使用 1×1 卷积调整池化分支的通道数
+        )
+
+    def forward(self, x):
+        branch1 = self.branch1(x)  # 计算 1×1 卷积分支
+        branch2 = self.branch2(x)  # 计算 1×1 → 3×3 卷积分支
+        branch3 = self.branch3(x)  # 计算 1×1 → 5×5 卷积分支
+        branch4 = self.branch4(x)  # 计算池化 → 1×1 卷积分支
+
+        outputs = torch.cat(
+            [branch1, branch2, branch3, branch4],
+            dim=1,
+        )  # 沿通道维度拼接四个分支的输出
+
+        return outputs  # 返回拼接后的特征图
+```
+
+假设输入是：
+
+```
+(batch, 192, 28, 28)
+```
+
+并创建：
+
+```
+inception3a = InceptionBlock(
+    in_channels=192,
+    out_1x1=64,
+    red_3x3=96,
+    out_3x3=128,
+    red_5x5=16,
+    out_5x5=32,
+    out_1x1pool=32,
+)
+```
+
+四条分支输出通道数为：
+
+```
+分支一：64
+分支二：128
+分支三：32
+分支四：32
+```
+
+拼接后：
+
+```
+64 + 128 + 32 + 32 = 256
+```
+
+最终形状为：
+
+```
+(batch, 192, 28, 28) → (batch, 256, 28, 28)
+```
+
+---
+
+## 5. 辅助分类器
+
+原始 GoogLeNet 在中间层加入了两个辅助分类器（Auxiliary Classifier）。
+
+作用：
+
+```
+为中间层提供额外梯度
+缓解深层网络中的梯度消失问题
+训练时作为正则化的一部分
+```
+
+辅助分类器只在训练模式下使用。
+
+```
+class AuxiliaryClassifier(nn.Module):  # 定义辅助分类器
+    def __init__(self, in_channels, num_classes):
+        super(AuxiliaryClassifier, self).__init__()  # 初始化父类
+
+        self.avgpool = nn.AvgPool2d(
+            kernel_size=5,
+            stride=3,
+        )  # 对中间特征图进行平均池化
+
+        self.conv = ConvBlock(
+            in_channels,
+            128,
+            kernel_size=1,
+        )  # 使用 1×1 卷积将通道数变为 128
+
+        self.fc1 = nn.Linear(
+            128 * 4 * 4,
+            1024,
+        )  # 将展平后的特征映射到 1024 维
+
+        self.relu = nn.ReLU()  # 创建 ReLU 激活函数
+
+        self.dropout = nn.Dropout(
+            p=0.7
+        )  # 训练时随机丢弃部分神经元
+
+        self.fc2 = nn.Linear(
+            1024,
+            num_classes,
+        )  # 输出类别 logits
+
+    def forward(self, x):
+        x = self.avgpool(x)  # 执行平均池化
+        x = self.conv(x)  # 执行 1×1 卷积
+        x = torch.flatten(
+            x,
+            start_dim=1,
+        )  # 将特征图展平
+
+        x = self.fc1(x)  # 通过第一个全连接层
+        x = self.relu(x)  # 使用 ReLU 激活
+        x = self.dropout(x)  # 使用 Dropout
+        x = self.fc2(x)  # 输出辅助分类结果
+
+        return x  # 返回辅助 logits
+```
+
+训练损失通常写成：
+
+```
+loss = (
+    criterion(main_logits, labels)
+    + 0.3 * criterion(aux1_logits, labels)
+    + 0.3 * criterion(aux2_logits, labels)
+)  # 主分类损失加上两个辅助分类损失
+```
+
+验证和推理时只使用主分类器输出。
+
+---
+
+## 6. 完整 GoogLeNet 实现
+
+下面使用 `224×224` 的 RGB 图片作为输入，适合 ImageNet 风格的图像分类任务。
+
+```
+class GoogLeNet(nn.Module):  # 定义 GoogLeNet 网络
+    def __init__(self, num_classes=1000, auxiliary_classifiers=True):
+        super(GoogLeNet, self).__init__()  # 初始化 nn.Module 父类
+
+        self.auxiliary_classifiers = auxiliary_classifiers  # 保存是否使用辅助分类器的设置
+
+        self.conv1 = ConvBlock(
+            in_channels=3,
+            out_channels=64,
+            kernel_size=7,
+            stride=2,
+            padding=3,
+        )  # (batch, 3, 224, 224) → (batch, 64, 112, 112)
+
+        self.maxpool1 = nn.MaxPool2d(
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        )  # (batch, 64, 112, 112) → (batch, 64, 56, 56)
+
+        self.conv2 = ConvBlock(
+            in_channels=64,
+            out_channels=192,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+        )  # (batch, 64, 56, 56) → (batch, 192, 56, 56)
+
+        self.maxpool2 = nn.MaxPool2d(
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        )  # (batch, 192, 56, 56) → (batch, 192, 28, 28)
+
+        self.inception3a = InceptionBlock(
+            192,
+            64,
+            96,
+            128,
+            16,
+            32,
+            32,
+        )  # 输出通道数：64 + 128 + 32 + 32 = 256
+
+        self.inception3b = InceptionBlock(
+            256,
+            128,
+            128,
+            192,
+            32,
+            96,
+            64,
+        )  # 输出通道数：128 + 192 + 96 + 64 = 480
+
+        self.maxpool3 = nn.MaxPool2d(
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        )  # (batch, 480, 28, 28) → (batch, 480, 14, 14)
+
+        self.inception4a = InceptionBlock(
+            480,
+            192,
+            96,
+            208,
+            16,
+            48,
+            64,
+        )  # 输出通道数：512
+
+        self.inception4b = InceptionBlock(
+            512,
+            160,
+            112,
+            224,
+            24,
+            64,
+            64,
+        )  # 输出通道数：512
+
+        self.inception4c = InceptionBlock(
+            512,
+            128,
+            128,
+            256,
+            24,
+            64,
+            64,
+        )  # 输出通道数：512
+
+        self.inception4d = InceptionBlock(
+            512,
+            112,
+            144,
+            288,
+            32,
+            64,
+            64,
+        )  # 输出通道数：528
+
+        self.inception4e = InceptionBlock(
+            528,
+            256,
+            160,
+            320,
+            32,
+            128,
+            128,
+        )  # 输出通道数：832
+
+        self.maxpool4 = nn.MaxPool2d(
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        )  # (batch, 832, 14, 14) → (batch, 832, 7, 7)
+
+        self.inception5a = InceptionBlock(
+            832,
+            256,
+            160,
+            320,
+            32,
+            128,
+            128,
+        )  # 输出通道数：832
+
+        self.inception5b = InceptionBlock(
+            832,
+            384,
+            192,
+            384,
+            48,
+            128,
+            128,
+        )  # 输出通道数：1024
+
+        self.avgpool = nn.AvgPool2d(
+            kernel_size=7,
+            stride=1,
+        )  # (batch, 1024, 7, 7) → (batch, 1024, 1, 1)
+
+        self.dropout = nn.Dropout(
+            p=0.4
+        )  # 在最终分类层前使用 Dropout
+
+        self.fc = nn.Linear(
+            1024,
+            num_classes,
+        )  # 输出类别 logits
+
+        if self.auxiliary_classifiers:
+            self.aux1 = AuxiliaryClassifier(
+                in_channels=512,
+                num_classes=num_classes,
+            )  # 接收 inception4a 的输出
+
+            self.aux2 = AuxiliaryClassifier(
+                in_channels=528,
+                num_classes=num_classes,
+            )  # 接收 inception4d 的输出
+        else:
+            self.aux1 = None  # 不创建第一个辅助分类器
+            self.aux2 = None  # 不创建第二个辅助分类器
+
+    def forward(self, x):
+        x = self.conv1(x)  # 第一层卷积
+        x = self.maxpool1(x)  # 第一次最大池化
+
+        x = self.conv2(x)  # 第二层卷积
+        x = self.maxpool2(x)  # 第二次最大池化
+
+        x = self.inception3a(x)  # 经过 Inception 3a
+        x = self.inception3b(x)  # 经过 Inception 3b
+        x = self.maxpool3(x)  # 第三次最大池化
+
+        x = self.inception4a(x)  # 经过 Inception 4a
+
+        if self.training and self.auxiliary_classifiers:
+            aux1_logits = self.aux1(x)  # 训练时计算第一个辅助分类器输出
+
+        x = self.inception4b(x)  # 经过 Inception 4b
+        x = self.inception4c(x)  # 经过 Inception 4c
+        x = self.inception4d(x)  # 经过 Inception 4d
+
+        if self.training and self.auxiliary_classifiers:
+            aux2_logits = self.aux2(x)  # 训练时计算第二个辅助分类器输出
+
+        x = self.inception4e(x)  # 经过 Inception 4e
+        x = self.maxpool4(x)  # 第四次最大池化
+
+        x = self.inception5a(x)  # 经过 Inception 5a
+        x = self.inception5b(x)  # 经过 Inception 5b
+
+        x = self.avgpool(x)  # 进行平均池化，得到 (batch, 1024, 1, 1)
+        x = torch.flatten(
+            x,
+            start_dim=1,
+        )  # 展平为 (batch, 1024)
+
+        x = self.dropout(x)  # 使用 Dropout
+        main_logits = self.fc(x)  # 得到主分类器输出
+
+        if self.training and self.auxiliary_classifiers:
+            return main_logits, aux1_logits, aux2_logits  # 训练时返回三个输出
+
+        return main_logits  # 验证和推理时只返回主分类结果
+```
+
+---
+
+## 7. 测试模型
+
+评估模式下，模型只返回主分类器的输出：
+
+```
+model = GoogLeNet(
+    num_classes=10,
+    auxiliary_classifiers=True,
+)  # 创建 10 分类 GoogLeNet
+
+model.eval()  # 切换到评估模式
+
+x = torch.randn(
+    2,
+    3,
+    224,
+    224,
+)  # 创建两张随机 RGB 图片
+
+output = model(x)  # 前向传播
+
+print(output.shape)  # 输出 torch.Size([2, 10])
+```
+
+训练模式下，且开启辅助分类器时，模型会返回三个结果：
+
+```
+model.train()  # 切换到训练模式
+
+main_logits, aux1_logits, aux2_logits = model(x)  # 获取主输出和两个辅助输出
+
+print(main_logits.shape)  # torch.Size([2, 10])
+print(aux1_logits.shape)  # torch.Size([2, 10])
+print(aux2_logits.shape)  # torch.Size([2, 10])
+```
+
+---
+
+## 8. 训练时如何计算损失
+
+```
+criterion = nn.CrossEntropyLoss()  # 创建多分类交叉熵损失函数
+
+model.train()  # 切换到训练模式
+
+main_logits, aux1_logits, aux2_logits = model(images)  # 获取三个分类器输出
+
+loss = (
+    criterion(main_logits, labels)
+    + 0.3 * criterion(aux1_logits, labels)
+    + 0.3 * criterion(aux2_logits, labels)
+)  # 主损失加上两个权重为 0.3 的辅助损失
+
+optimizer.zero_grad()  # 清除旧梯度
+loss.backward()  # 反向传播
+optimizer.step()  # 更新模型参数
+```
+
+验证或测试时：
+
+```
+model.eval()  # 切换到评估模式
+
+with torch.inference_mode():
+    logits = model(images)  # 此时模型只返回主分类器输出
+    predictions = logits.argmax(dim=1)  # 获取预测类别
+```
+
+---
+
+## 9. GoogLeNet 的主要尺寸变化
+
+输入为：
+
+```
+(batch, 3, 224, 224)
+```
+
+主要形状变化如下：
+
+```
+输入图片                    (batch, 3, 224, 224)
+
+Conv 7×7，stride=2          (batch, 64, 112, 112)
+
+MaxPool                     (batch, 64, 56, 56)
+
+Conv 3×3                    (batch, 192, 56, 56)
+
+MaxPool                     (batch, 192, 28, 28)
+
+Inception 3a                (batch, 256, 28, 28)
+
+Inception 3b                (batch, 480, 28, 28)
+
+MaxPool                     (batch, 480, 14, 14)
+
+Inception 4a ~ 4e           (batch, 832, 14, 14)
+
+MaxPool                     (batch, 832, 7, 7)
+
+Inception 5a ~ 5b           (batch, 1024, 7, 7)
+
+Average Pool                (batch, 1024, 1, 1)
+
+Flatten                     (batch, 1024)
+
+Linear                      (batch, num_classes)
+```
+
+---
+
+## 10. 常见错误
+
+### 四个分支无法拼接
+
+`torch.cat(..., dim=1)` 要求四个分支的高度和宽度相同。
+
+因此，`3×3` 和 `5×5` 卷积需要设置正确的 padding：
+
+```
+kernel_size=3, padding=1  # 保持空间尺寸不变
+kernel_size=5, padding=2  # 保持空间尺寸不变
+```
+
+池化分支也需要：
+
+```
+nn.MaxPool2d(
+    kernel_size=3,
+    stride=1,
+    padding=1,
+)
+```
+
+### 拼接维度错误
+
+Inception 模块需要沿通道维度拼接：
+
+```
+torch.cat(
+    [branch1, branch2, branch3, branch4],
+    dim=1,
+)
+```
+
+不要写成：
+
+```
+dim=0  # 错误：会尝试沿 batch 维度拼接
+```
+
+### 忘记处理辅助分类器输出
+
+训练时如果模型返回三个输出：
+
+```
+main_logits, aux1_logits, aux2_logits = model(images)
+```
+
+就需要将辅助损失加入总损失。
+
+验证时应先执行：
+
+```
+model.eval()
+```
+
+否则模型仍可能返回三个输出，导致验证代码报错。
+
+### 输入尺寸不匹配
+
+上面的网络使用：
+
+```
+nn.AvgPool2d(kernel_size=7, stride=1)
+```
+
+因此默认假设输入图片为 `224×224`，使最终特征图大小正好为 `7×7`。
+
+如果输入尺寸不同，更灵活的写法是：
+
+```
+self.avgpool = nn.AdaptiveAvgPool2d(
+    output_size=(1, 1)
+)  # 无论输入空间尺寸是多少，最终都输出 1×1
+```
+
+---
+
+## 11. 重点总结
+
+Inception 模块的核心：
+
+```
+outputs = torch.cat(
+    [
+        branch_1x1,
+        branch_3x3,
+        branch_5x5,
+        branch_pool,
+    ],
+    dim=1,
+)  # 沿通道维度拼接四条并行分支
+```
+
+`1×1` 卷积的作用：
+
+```
+降低通道数
+减少计算量
+增加网络非线性
+```
+
+GoogLeNet 训练时的特点：
+
+```
+主分类器损失
++
+两个辅助分类器损失
+```
+
+```
+loss = main_loss + 0.3 * aux1_loss + 0.3 * aux2_loss
+```
+
+总结：
+
+```
+GoogLeNet 通过 Inception 模块并行提取不同尺度的特征，
+再利用 1×1 卷积控制计算量，从而在加深网络的同时保持较高效率。
+```
+
+
+
+
+# PyTorch 从零实现 ResNet
+
+ResNet（Residual Neural Network）是 2015 年提出的经典 CNN，核心创新是引入了残差连接（Skip Connection），有效解决了深层网络中的梯度消失和退化问题。原始 ResNet 有 34 层、50 层、101 层、152 层等变体，在 ILSVRC 2015 中取得了冠军。[原始论文](https://arxiv.org/abs/1512.03385)
+
+---
+
+## 1. 残差连接的核心思想
+
+传统 CNN 堆叠卷积层时，随着网络加深，会出现梯度消失和退化问题（深层网络反而比浅层网络误差更大）。
+
+ResNet 引入残差连接（跳跃连接）来解决这个问题：
+
+```
+输入 x
+    ├─────────────────────────────┐
+    │                             │
+    ↓                             │
+卷积 → BatchNorm → ReLU          │
+    ↓                             │
+卷积 → BatchNorm                  │
+    ↓                             │
+    └─────────── + ───────────────┘
+                    ↓
+                  ReLU
+```
+
+残差块的数学表达式：
+
+```
+F(x) = 残差映射（两个卷积层学到的特征）
+输出 = F(x) + x  # 跳跃连接将输入直接加到输出上
+```
+
+如果残差映射 F(x) 趋向于 0，则输出 ≈ x，相当于学习了一个恒等映射，深层网络至少不会比浅层网络差。
+
+---
+
+## 2. 两种残差块
+
+ResNet 中主要有两种残差块：
+
+### BasicBlock（基础残差块）
+
+用于 ResNet-18 和 ResNet-34：
+
+```
+输入 x (channels: 64)
+    ├─────────────────────────────┐
+    │                             │
+    ↓                             │
+3×3 卷积, 64 → BatchNorm → ReLU   │
+    ↓                             │
+3×3 卷积, 64 → BatchNorm          │
+    ↓                             │
+    └─────────── + ───────────────┘
+                    ↓
+                  ReLU
+```
+
+### Bottleneck（瓶颈残差块）
+
+用于 ResNet-50、ResNet-101 和 ResNet-152：
+
+```
+输入 x (channels: 256)
+    ├─────────────────────────────────┐
+    │                                 │
+    ↓                                 │
+1×1 卷积, 64 → BN → ReLU             │  # 降维
+    ↓                                 │
+3×3 卷积, 64 → BN → ReLU             │  # 特征提取
+    ↓                                 │
+1×1 卷积, 256 → BN                    │  # 恢复维度
+    ↓                                 │
+    └─────────────── + ───────────────┘
+                    ↓
+                  ReLU
+```
+
+Bottleneck 的优势：用 1×1 卷积降低通道数，大幅减少 3×3 卷积的计算量。
+
+---
+
+## 3. 为什么需要 1×1 卷积在 Bottleneck 中？
+
+普通 3×3 卷积直接处理 256 通道的输入：
+
+```
+输入：256 通道 × 56×56
+3×3 卷积：256 → 256
+参数量：256 × 256 × 3 × 3 ≈ 589,824
+```
+
+使用 Bottleneck 结构：
+
+```
+1×1 卷积：256 → 64（降维）
+3×3 卷积：64 → 64
+1×1 卷积：64 → 256（升维）
+参数量：(256×64×1×1) + (64×64×3×3) + (64×256×1×1) ≈ 16,384 + 36,864 + 16,384 ≈ 69,632
+```
+
+Bottleneck 的参数只有普通卷积的 1/8 左右。
+
+---
+
+## 4. 基础卷积模块
+
+与 GoogLeNet 类似，ResNet 也使用 `卷积 → BatchNorm → ReLU` 的组合：
+
+```python
+import torch  # 导入 PyTorch
+import torch.nn as nn  # 导入神经网络模块
+
+
+class ConvBlock(nn.Module):  # 定义卷积基础模块
+    def __init__(self, in_channels, out_channels, **kwargs):
+        super(ConvBlock, self).__init__()  # 初始化 nn.Module 父类
+
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            bias=False,
+            **kwargs,
+        )  # 创建卷积层；后面有 BatchNorm，因此关闭卷积 bias
+
+        self.batchnorm = nn.BatchNorm2d(
+            out_channels
+        )  # 对每个输出通道进行批量归一化
+
+        self.relu = nn.ReLU()  # 创建 ReLU 激活函数
+
+    def forward(self, x):
+        x = self.conv(x)  # 执行卷积
+        x = self.batchnorm(x)  # 执行 BatchNorm
+        x = self.relu(x)  # 使用 ReLU 激活函数
+        return x  # 返回处理后的特征图
+```
+
+---
+
+## 5. 实现 BasicBlock
+
+```python
+class BasicBlock(nn.Module):  # 定义基础残差块
+    def __init__(self, in_channels, out_channels, stride=1):
+        super(BasicBlock, self).__init__()  # 初始化父类
+
+        # 第一个卷积层
+        self.conv1 = ConvBlock(
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
+        )  # 当 stride > 1 时，特征图尺寸减半
+
+        # 第二个卷积层
+        self.conv2 = nn.Conv2d(
+            out_channels,
+            out_channels,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+        )  # 这里不使用 ConvBlock，因为后面要加跳跃连接再做 ReLU
+
+        self.batchnorm2 = nn.BatchNorm2d(
+            out_channels
+        )  # 第二层卷积后的 BatchNorm
+
+        # 跳跃连接处理
+        self.skip = nn.Sequential()  # 默认恒等映射
+
+        if stride != 1 or in_channels != out_channels:
+            # 如果 stride != 1 或通道数变化，需要调整跳跃连接
+            self.skip = nn.Sequential(
+                nn.Conv2d(
+                    in_channels,
+                    out_channels,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False,
+                ),  # 使用 1×1 卷积调整通道数和尺寸
+
+                nn.BatchNorm2d(
+                    out_channels
+                ),  # 跳跃连接也进行 BatchNorm
+            )
+
+        self.relu = nn.ReLU()  # 创建最终的 ReLU 激活函数
+
+    def forward(self, x):
+        identity = x  # 保存输入作为恒等映射
+
+        x = self.conv1(x)  # 通过第一个卷积块
+        x = self.conv2(x)  # 通过第二个卷积
+        x = self.batchnorm2(x)  # 进行 BatchNorm
+
+        identity = self.skip(identity)  # 调整跳跃连接（如果需要）
+
+        x = x + identity  # 残差连接：输出 = 卷积输出 + 输入
+
+        x = self.relu(x)  # 使用 ReLU 激活
+
+        return x  # 返回残差块输出
+```
+
+---
+
+## 6. 实现 Bottleneck
+
+```python
+class Bottleneck(nn.Module):  # 定义瓶颈残差块
+    def __init__(self, in_channels, out_channels, stride=1):
+        super(Bottleneck, self).__init__()  # 初始化父类
+
+        # 1×1 卷积：降维
+        self.conv1 = ConvBlock(
+            in_channels,
+            out_channels // 4,
+            kernel_size=1,
+        )  # 将通道数减少到原来的 1/4
+
+        # 3×3 卷积：特征提取
+        self.conv2 = ConvBlock(
+            out_channels // 4,
+            out_channels // 4,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
+        )  # 在降维后的低维空间进行 3×3 卷积
+
+        # 1×1 卷积：升维恢复通道数
+        self.conv3 = nn.Conv2d(
+            out_channels // 4,
+            out_channels,
+            kernel_size=1,
+            bias=False,
+        )  # 将通道数恢复为 out_channels
+
+        self.batchnorm3 = nn.BatchNorm2d(
+            out_channels
+        )  # 第三层卷积后的 BatchNorm
+
+        # 跳跃连接处理
+        self.skip = nn.Sequential()  # 默认恒等映射
+
+        if stride != 1 or in_channels != out_channels:
+            # 如果 stride != 1 或通道数变化，需要调整跳跃连接
+            self.skip = nn.Sequential(
+                nn.Conv2d(
+                    in_channels,
+                    out_channels,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False,
+                ),  # 使用 1×1 卷积调整通道数和尺寸
+
+                nn.BatchNorm2d(
+                    out_channels
+                ),  # 跳跃连接也进行 BatchNorm
+            )
+
+        self.relu = nn.ReLU()  # 创建最终的 ReLU 激活函数
+
+    def forward(self, x):
+        identity = x  # 保存输入作为恒等映射
+
+        x = self.conv1(x)  # 1×1 卷积降维
+        x = self.conv2(x)  # 3×3 卷积特征提取
+        x = self.conv3(x)  # 1×1 卷积升维
+        x = self.batchnorm3(x)  # 进行 BatchNorm
+
+        identity = self.skip(identity)  # 调整跳跃连接（如果需要）
+
+        x = x + identity  # 残差连接：输出 = 卷积输出 + 输入
+
+        x = self.relu(x)  # 使用 ReLU 激活
+
+        return x  # 返回残差块输出
+```
+
+---
+
+## 7. ResNet 的整体结构
+
+ResNet 整体结构如下（以 ResNet-34 为例）：
+
+```
+输入 (batch, 3, 224, 224)
+    ↓
+7×7 卷积，64，stride=2
+    ↓
+3×3 最大池化，stride=2
+    ↓
+BasicBlock × 3，64 通道
+    ↓
+BasicBlock × 4，128 通道，stride=2（第一次下采样）
+    ↓
+BasicBlock × 6，256 通道，stride=2（第一次下采样）
+    ↓
+BasicBlock × 3，512 通道，stride=2（第一次下采样）
+    ↓
+全局平均池化
+    ↓
+全连接层 → 输出 (batch, num_classes)
+```
+
+对于 ResNet-50 及以上，将 BasicBlock 替换为 Bottleneck。
+
+---
+
+## 8. 完整 ResNet 实现
+
+```python
+class ResNet(nn.Module):  # 定义 ResNet 网络
+    def __init__(
+        self,
+        block,  # 使用的残差块类型（BasicBlock 或 Bottleneck）
+        layers,  # 每个阶段的层数列表，如 [3, 4, 6, 3]
+        num_classes=1000,
+        in_channels=3,
+    ):
+        super(ResNet, self).__init__()  # 初始化 nn.Module 父类
+
+        self.in_channels = 64  # 初始卷积输出通道数
+
+        # 初始卷积层
+        self.conv1 = ConvBlock(
+            in_channels,
+            64,
+            kernel_size=7,
+            stride=2,
+            padding=3,
+        )  # (batch, 3, 224, 224) → (batch, 64, 112, 112)
+
+        self.maxpool = nn.MaxPool2d(
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        )  # (batch, 64, 112, 112) → (batch, 64, 56, 56)
+
+        # 四个阶段的残差块
+        self.layer1 = self._make_layer(
+            block,
+            out_channels=64,
+            num_blocks=layers[0],
+            stride=1,
+        )  # (batch, 64, 56, 56) → (batch, 64, 56, 56)
+
+        self.layer2 = self._make_layer(
+            block,
+            out_channels=128,
+            num_blocks=layers[1],
+            stride=2,
+        )  # (batch, 64, 56, 56) → (batch, 128, 28, 28)
+
+        self.layer3 = self._make_layer(
+            block,
+            out_channels=256,
+            num_blocks=layers[2],
+            stride=2,
+        )  # (batch, 128, 28, 28) → (batch, 256, 14, 14)
+
+        self.layer4 = self._make_layer(
+            block,
+            out_channels=512,
+            num_blocks=layers[3],
+            stride=2,
+        )  # (batch, 256, 14, 14) → (batch, 512, 7, 7)
+
+        # 全局平均池化
+        self.avgpool = nn.AdaptiveAvgPool2d(
+            output_size=(1, 1)
+        )  # 无论输入空间尺寸是多少，最终都输出 1×1
+
+        # 全连接分类层
+        self.fc = nn.Linear(
+            512 * 4 if block == Bottleneck else 512,
+            num_classes,
+        )  # Bottleneck 的输出通道是普通 block 的 4 倍
+
+    def _make_layer(self, block, out_channels, num_blocks, stride):
+        # 创建由多个残差块组成的层
+
+        layers = []  # 存储所有残差块的列表
+
+        # 第一个残差块（可能需要下采样）
+        layers.append(
+            block(
+                self.in_channels,
+                out_channels,
+                stride,
+            )
+        )  # 添加第一个残差块
+
+        self.in_channels = out_channels  # 更新当前通道数
+
+        # 后续残差块（保持通道数和尺寸不变）
+        for _ in range(num_blocks - 1):
+            layers.append(
+                block(
+                    self.in_channels,
+                    out_channels,
+                    stride=1,
+                )
+            )  # 添加剩余残差块，stride=1 保持尺寸不变
+
+        return nn.Sequential(*layers)  # 返回所有残差块的顺序容器
+
+    def forward(self, x):
+        x = self.conv1(x)  # 初始卷积
+        x = self.maxpool(x)  # 最大池化
+
+        x = self.layer1(x)  # 第一阶段残差块
+        x = self.layer2(x)  # 第二阶段残差块
+        x = self.layer3(x)  # 第三阶段残差块
+        x = self.layer4(x)  # 第四阶段残差块
+
+        x = self.avgpool(x)  # 全局平均池化 (batch, 512, 1, 1)
+        x = torch.flatten(
+            x,
+            start_dim=1,
+        )  # 展平为 (batch, 512)
+
+        x = self.fc(x)  # 全连接层得到类别 logits
+
+        return x  # 返回分类结果
+```
+
+---
+
+## 9. 创建不同版本的 ResNet
+
+```python
+def resnet18(num_classes=1000):
+    return ResNet(
+        BasicBlock,
+        [2, 2, 2, 2],
+        num_classes,
+    )  # ResNet-18：每个阶段 2 个 BasicBlock
+
+
+def resnet34(num_classes=1000):
+    return ResNet(
+        BasicBlock,
+        [3, 4, 6, 3],
+        num_classes,
+    )  # ResNet-34：每个阶段分别为 3、4、6、3 个 BasicBlock
+
+
+def resnet50(num_classes=1000):
+    return ResNet(
+        Bottleneck,
+        [3, 4, 6, 3],
+        num_classes,
+    )  # ResNet-50：每个阶段 3、4、6、3 个 Bottleneck
+
+
+def resnet101(num_classes=1000):
+    return ResNet(
+        Bottleneck,
+        [3, 4, 23, 3],
+        num_classes,
+    )  # ResNet-101：每个阶段 3、4、23、3 个 Bottleneck
+
+
+def resnet152(num_classes=1000):
+    return ResNet(
+        Bottleneck,
+        [3, 8, 36, 3],
+        num_classes,
+    )  # ResNet-152：每个阶段 3、8、36、3 个 Bottleneck
+```
+
+---
+
+## 10. 测试模型
+
+```python
+model = resnet34(
+    num_classes=10,
+)  # 创建 10 分类的 ResNet-34
+
+x = torch.randn(
+    2,
+    3,
+    224,
+    224,
+)  # 创建两张随机 RGB 图片
+
+output = model(x)  # 前向传播
+
+print(output.shape)  # 输出 torch.Size([2, 10])
+```
+
+---
+
+## 11. ResNet 的尺寸变化
+
+输入为 `(batch, 3, 224, 224)`，使用 ResNet-34：
+
+```
+输入图片                    (batch, 3, 224, 224)
+
+Conv 7×7，stride=2          (batch, 64, 112, 112)
+
+MaxPool 3×3，stride=2       (batch, 64, 56, 56)
+
+Layer1 × 3 (stride=1)       (batch, 64, 56, 56)
+
+Layer2 × 4 (stride=2)       (batch, 128, 28, 28)
+
+Layer3 × 6 (stride=2)       (batch, 256, 14, 14)
+
+Layer4 × 3 (stride=2)       (batch, 512, 7, 7)
+
+AdaptiveAvgPool             (batch, 512, 1, 1)
+
+Flatten                     (batch, 512)
+
+Linear                      (batch, num_classes)
+```
+
+---
+
+## 12. 常见错误
+
+### 跳跃连接的尺寸不匹配
+
+当 `stride=2` 或通道数变化时，跳跃连接需要调整：
+
+```python
+# 正确写法
+self.skip = nn.Sequential(
+    nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride),
+    nn.BatchNorm2d(out_channels),
+)
+
+# 错误写法：直接相加会导致尺寸不匹配
+# x = x + identity  # 通道数或空间尺寸不同，无法相加
+```
+
+### 残差块最后的激活函数位置
+
+残差块的正确结构：
+
+```python
+x = conv1(x)      # 卷积 + BN + ReLU
+x = conv2(x)      # 卷积 + BN
+x = x + identity  # 残差连接
+x = relu(x)       # 放在最后
+```
+
+错误写法：
+
+```python
+x = conv1(x)  # 卷积 + BN + ReLU
+x = conv2(x)  # 卷积 + BN + ReLU
+x = x + identity  # 错误：跳跃连接前已经经过了 ReLU
+```
+
+### Bottleneck 的输出通道计算
+
+Bottleneck 的输出通道是 `out_channels`，中间层是 `out_channels // 4`：
+
+```python
+# 正确
+self.conv1 = ConvBlock(in_channels, out_channels // 4, kernel_size=1)
+self.conv2 = ConvBlock(out_channels // 4, out_channels // 4, kernel_size=3)
+self.conv3 = nn.Conv2d(out_channels // 4, out_channels, kernel_size=1)
+
+# 错误
+self.conv1 = ConvBlock(in_channels, out_channels // 2, kernel_size=1)  # 错误的比例
+```
+
+### 初始化 `self.in_channels`
+
+在 `_make_layer` 方法中，需要正确更新 `self.in_channels`：
+
+```python
+def _make_layer(self, block, out_channels, num_blocks, stride):
+    layers = []
+    layers.append(block(self.in_channels, out_channels, stride))
+    self.in_channels = out_channels  # 必须更新
+    
+    for _ in range(num_blocks - 1):
+        layers.append(block(self.in_channels, out_channels, stride=1))
+    
+    return nn.Sequential(*layers)
+```
+
+如果忘记更新，后续残差块的输入通道数会错误。
+
+---
+
+## 13. 重点总结
+
+残差块的核心公式：
+
+```
+输出 = F(x) + x  # F(x) 是残差映射，x 是跳跃连接
+```
+
+跳跃连接的作用：
+
+```
+缓解梯度消失问题
+允许网络学习恒等映射
+使深层网络的训练更加稳定
+```
+
+BasicBlock vs Bottleneck：
+
+```
+BasicBlock：两个 3×3 卷积，用于 ResNet-18/34
+Bottleneck：1×1→3×3→1×1 结构，用于 ResNet-50/101/152
+```
+
+下采样处理：
+
+```
+当 stride=2 或通道数变化时
+跳跃连接使用 1×1 卷积调整尺寸和通道数
+```
+
+```
+输出 = 卷积输出 + 跳跃连接调整后的输入
+```
+
+总结：
+
+```
+ResNet 通过残差连接让梯度可以绕过卷积层直接传播，
+从而允许网络达到上百层的深度而不出现退化问题。
+Bottleneck 结构通过 1×1 卷积降维，大幅减少了计算量。
+```
+
+
+# PyTorch 从零实现 EfficientNet
+
+EfficientNet 是 2019 年提出的高效 CNN 架构，核心创新是 **复合缩放方法（Compound Scaling）**：统一地缩放网络的深度、宽度和输入分辨率，在提升精度的同时保持计算效率。EfficientNet-B7 在 ImageNet 上达到 84.3% Top-1 精度，参数量仅为 GPipe 的 1/8.4，推理速度快 6.1 倍。 [原始论文](https://arxiv.org/abs/1905.11946)
+
+---
+
+## 1. 复合缩放的核心思想
+
+传统的网络缩放通常只调整深度、宽度、分辨率中的一个维度。EfficientNet 提出这三个维度是相互关联的，需要协同调整：
+
+```
+深度（depth）：网络层数，越深特征越丰富，但梯度消失风险也越高
+宽度（width）：通道数，越宽特征粒度越细，但过宽难以捕捉高层特征
+分辨率（resolution）：输入图像尺寸，越高细节越多，但计算量剧增
+```
+
+复合缩放使用一个系数 φ 统一缩放三个维度：
+
+```
+depth:   d = α^φ
+width:   w = β^φ
+resolution: r = γ^φ
+
+约束条件：α · β² · γ² ≈ 2, 且 α ≥ 1, β ≥ 1, γ ≥ 1
+```
+
+这里的 α、β、γ 通过小规模网格搜索确定。EfficientNet-B0 的 α=1.2, β=1.1, γ=1.15。
+
+下面的图展示了四种缩放方式的区别：图中 (a) 是基线网络，(b)(c)(d) 分别单独增加宽度、深度、分辨率，(e) 是复合缩放的效果。
+
+![](../图片/Pasted%20image%2020260811175728.png)
+
+---
+
+## 2. MBConv 模块
+
+EfficientNet 的基础构建块是 **MBConv**（Mobile Inverted Bottleneck Conv），源自 MobileNetV3。 它包含以下关键组件：
+
+### 2.1 深度可分离卷积（Depthwise Separable Convolution）
+
+```
+标准卷积：
+输入 (H, W, C_in) → 卷积核 (K×K×C_in×C_out) → 输出 (H, W, C_out)
+
+深度可分离卷积：
+步骤一：逐通道卷积（Depthwise Conv）
+输入 (H, W, C) → 每个通道单独卷积 → 输出 (H, W, C)
+步骤二：逐点卷积（Pointwise Conv，即 1×1）
+输入 (H, W, C) → 1×1 卷积 → 输出 (H, W, C_out)
+参数约减少为原来的 1/K²
+```
+
+### 2.2 反向残差结构（Inverted Residual）
+
+与 ResNet 的残差块相反：
+
+```
+ResNet 残差块：通道数先降后升（沙漏形）
+  输入 256 → 1×1 降维到 64 → 3×3 → 1×1 升维到 256
+
+MBConv 反向残差：通道数先升后降（纺锤形）
+  输入 32 → 1×1 升维到 192（expand_ratio=6）→ 3×3 深度卷积 → 1×1 降维到 16
+```
+
+反向残差在高维空间进行深度卷积，可以提取更丰富的特征。
+
+### 2.3 Squeeze-and-Excitation（SE）注意力
+
+SE 模块通过全局池化 + 全连接层学习每个通道的重要性权重：
+
+```
+输入特征图 (H, W, C)
+    ↓
+全局平均池化 → (1, 1, C)
+    ↓
+全连接层（降维）→ ReLU
+    ↓
+全连接层（升维）→ Sigmoid → 通道权重 (1, 1, C)
+    ↓
+输入 × 通道权重 → 加权后的输出
+```
+
+### 2.4 Swish 激活函数
+
+EfficientNet 使用 Swish（也称 SiLU）激活函数：
+
+```
+Swish(x) = x · Sigmoid(x) = x / (1 + e^(-x))
+```
+
+Swish 是平滑的非单调激活函数，在深层网络中表现优于 ReLU。
+
+---
+
+## 3. MBConv 完整实现
+
+```python
+import torch  # 导入 PyTorch
+import torch.nn as nn  # 导入神经网络模块
+import torch.nn.functional as F  # 导入函数式接口
+
+
+class Swish(nn.Module):  # 定义 Swish 激活函数
+    def forward(self, x):
+        return x * torch.sigmoid(x)  # Swish(x) = x * sigmoid(x)
+
+
+class ConvBlock(nn.Module):  # 定义基础卷积模块（卷积 + BN + Swish）
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, groups=1):
+        super(ConvBlock, self).__init__()
+
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            groups=groups,  # groups=in_channels 时为深度卷积
+            bias=False,
+        )  # 创建卷积层
+
+        self.bn = nn.BatchNorm2d(
+            out_channels
+        )  # 批量归一化
+
+        self.activation = Swish()  # 使用 Swish 激活
+
+    def forward(self, x):
+        x = self.conv(x)  # 执行卷积
+        x = self.bn(x)  # 执行 BatchNorm
+        x = self.activation(x)  # 使用 Swish 激活
+        return x
+
+
+class SqueezeExcitation(nn.Module):  # 定义 SE 注意力模块
+    def __init__(self, in_channels, reduction_ratio=24):
+        super(SqueezeExcitation, self).__init__()
+
+        # 确保缩减后的通道数至少为 1
+        squeezed_channels = max(1, in_channels // reduction_ratio)
+
+        # Squeeze: 全局平均池化
+        self.squeeze = nn.AdaptiveAvgPool2d(
+            output_size=1
+        )  # 将每个特征图压缩为单个数值
+
+        # Excitation: 两个全连接层
+        self.fc1 = nn.Conv2d(
+            in_channels,
+            squeezed_channels,
+            kernel_size=1,
+        )  # 降维层（用 1×1 卷积代替全连接）
+
+        self.fc2 = nn.Conv2d(
+            squeezed_channels,
+            in_channels,
+            kernel_size=1,
+        )  # 升维层（恢复通道数）
+
+        self.activation = Swish()  # Swish 激活用于第一层
+
+        self.sigmoid = nn.Sigmoid()  # Sigmoid 输出通道权重
+
+    def forward(self, x):
+        # x: (batch, channels, H, W)
+        out = self.squeeze(x)  # (batch, channels, 1, 1)
+
+        out = self.fc1(out)  # (batch, channels/24, 1, 1)
+        out = self.activation(out)  # Swish 激活
+
+        out = self.fc2(out)  # (batch, channels, 1, 1)
+        out = self.sigmoid(out)  # Sigmoid 得到通道权重
+
+        return x * out  # 将权重乘以原始特征图
+
+
+class MBConvBlock(nn.Module):  # 定义 MBConv 模块
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride,
+        expand_ratio,
+        se_ratio=24,
+    ):
+        super(MBConvBlock, self).__init__()
+
+        self.stride = stride  # 保存步长用于判断是否下采样
+        self.use_residual = (stride == 1 and in_channels == out_channels)  # 只有当步长为 1 且通道数不变时才使用残差连接
+
+        # 扩展阶段（Expansion Phase）
+        expanded_channels = in_channels * expand_ratio  # 扩展后的通道数
+
+        if expand_ratio != 1:
+            # 用 1×1 卷积扩展通道数
+            self.expand_conv = ConvBlock(
+                in_channels,
+                expanded_channels,
+                kernel_size=1,
+            )  # 输入 → 扩展通道
+        else:
+            self.expand_conv = nn.Identity()  # 如果扩展倍率为 1，跳过扩展层
+
+        # 深度卷积阶段（Depthwise Convolution Phase）
+        padding = kernel_size // 2  # 保持空间尺寸不变
+        self.depthwise_conv = ConvBlock(
+            expanded_channels,
+            expanded_channels,
+            kernel_size,
+            stride,
+            padding=padding,
+            groups=expanded_channels,  # groups=通道数，实现逐通道卷积
+        )  # 每个通道独立卷积
+
+        # SE 注意力阶段
+        self.se = SqueezeExcitation(
+            expanded_channels,
+            se_ratio,
+        )  # 学习通道重要性权重
+
+        # 压缩阶段（Projection Phase）
+        self.project_conv = nn.Conv2d(
+            expanded_channels,
+            out_channels,
+            kernel_size=1,
+            bias=False,
+        )  # 1×1 卷积降维到输出通道数
+
+        self.project_bn = nn.BatchNorm2d(
+            out_channels
+        )  # 输出前进行 BatchNorm（不使用激活）
+
+    def forward(self, x):
+        residual = x  # 保存输入用于残差连接
+
+        # 1. 扩展阶段
+        x = self.expand_conv(x)  # 扩大通道数
+
+        # 2. 深度卷积阶段
+        x = self.depthwise_conv(x)  # 逐通道卷积
+
+        # 3. SE 注意力阶段
+        x = self.se(x)  # 通道注意力加权
+
+        # 4. 压缩阶段
+        x = self.project_conv(x)  # 降维到输出通道数
+        x = self.project_bn(x)  # BatchNorm（无激活）
+
+        # 5. 残差连接
+        if self.use_residual:
+            x = x + residual  # 输出 = 主路径输出 + 输入（残差连接）
+
+        return x
+```
+
+---
+
+## 4. EfficientNet-B0 整体结构
+
+EfficientNet-B0 作为基线模型，结构如下：
+
+| Stage | 操作 | 输入通道 | 输出通道 | 卷积核 | 步长 | 扩展倍率 | 重复次数 |
+|-------|------|---------|---------|--------|------|---------|---------|
+| 1 | Conv3×3 | 3 | 32 | 3 | 2 | - | 1 |
+| 2 | MBConv | 32 | 16 | 3 | 1 | 1 | 1 |
+| 3 | MBConv | 16 | 24 | 3 | 2 | 6 | 2 |
+| 4 | MBConv | 24 | 40 | 5 | 2 | 6 | 2 |
+| 5 | MBConv | 40 | 80 | 3 | 2 | 6 | 3 |
+| 6 | MBConv | 80 | 112 | 5 | 1 | 6 | 3 |
+| 7 | MBConv | 112 | 192 | 5 | 2 | 6 | 4 |
+| 8 | MBConv | 192 | 320 | 3 | 1 | 6 | 1 |
+| 9 | Conv1×1 + Pool + FC | 320 | 1280 | 1 | 1 | - | 1 |
+
+---
+
+## 5. 完整 EfficientNet 实现
+
+```python
+class EfficientNet(nn.Module):  # 定义 EfficientNet 网络
+    def __init__(
+        self,
+        width_multiplier=1.0,  # 宽度缩放系数
+        depth_multiplier=1.0,  # 深度缩放系数
+        resolution=224,  # 输入分辨率
+        num_classes=1000,  # 分类数
+        in_channels=3,
+    ):
+        super(EfficientNet, self).__init__()
+
+        # MBConv 配置：[重复次数, 输入通道, 输出通道, 卷积核, 步长, 扩展倍率]
+        # 格式: (repeat, in_ch, out_ch, kernel, stride, expand_ratio)
+        config = [
+            [1, 32, 16, 3, 1, 1],   # Stage 1
+            [2, 16, 24, 3, 2, 6],   # Stage 2
+            [2, 24, 40, 5, 2, 6],   # Stage 3
+            [3, 40, 80, 3, 2, 6],   # Stage 4
+            [3, 80, 112, 5, 1, 6],  # Stage 5
+            [4, 112, 192, 5, 2, 6], # Stage 6
+            [1, 192, 320, 3, 1, 6], # Stage 7
+        ]
+
+        # 根据缩放系数调整通道数和重复次数
+        self._round_channels = lambda x: int(
+            (x * width_multiplier + 0.5) // 4 * 4
+        )  # 通道数取整到 4 的倍数
+        self._round_repeats = lambda x: int(
+            x * depth_multiplier
+        )  # 重复次数取整
+
+        # Stage 1: 初始卷积层
+        init_channels = self._round_channels(32)
+        self.conv1 = ConvBlock(
+            in_channels,
+            init_channels,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        )  # (batch, 3, 224, 224) → (batch, 32, 112, 112)
+
+        # Stage 2-8: MBConv 块
+        self.blocks = nn.Sequential()  # 顺序容器
+
+        in_channels = init_channels  # 当前输入通道数
+
+        for repeat, in_ch, out_ch, kernel, stride, expand in config:
+            # 根据缩放系数调整通道数
+            in_ch = self._round_channels(in_ch)
+            out_ch = self._round_channels(out_ch)
+            repeat = self._round_repeats(repeat)
+
+            # 创建该阶段的所有 MBConv 块
+            for i in range(repeat):
+                # 只有第一个 MBConv 块使用指定的 stride（可能下采样）
+                # 后续 MBConv 块 stride=1
+                block_stride = stride if i == 0 else 1
+
+                self.blocks.append(
+                    MBConvBlock(
+                        in_channels,
+                        out_ch,
+                        kernel,
+                        block_stride,
+                        expand,
+                    )
+                )  # 添加 MBConv 块
+
+                in_channels = out_ch  # 更新当前输入通道数
+
+        # Stage 9: 输出层
+        final_channels = self._round_channels(1280)
+        self.conv2 = ConvBlock(
+            in_channels,
+            final_channels,
+            kernel_size=1,
+        )  # (batch, 320, 7, 7) → (batch, 1280, 7, 7)
+
+        # 全局平均池化 + 分类层
+        self.avgpool = nn.AdaptiveAvgPool2d(
+            output_size=1
+        )  # (batch, 1280, 7, 7) → (batch, 1280, 1, 1)
+
+        self.fc = nn.Linear(
+            final_channels,
+            num_classes,
+        )  # (batch, 1280) → (batch, num_classes)
+
+        # 保存分辨率以便外部使用
+        self.resolution = resolution
+
+    def forward(self, x):
+        x = self.conv1(x)  # 初始卷积
+        x = self.blocks(x)  # MBConv 块序列
+        x = self.conv2(x)  # 最终 1×1 卷积
+
+        x = self.avgpool(x)  # 全局平均池化
+        x = torch.flatten(x, start_dim=1)  # 展平
+        x = self.fc(x)  # 全连接分类
+
+        return x
+```
+
+---
+
+## 6. 创建不同版本的 EfficientNet
+
+不同版本通过缩放系数 φ 确定：
+
+```python
+def efficientnet_b0(num_classes=1000):
+    return EfficientNet(
+        width_multiplier=1.0,
+        depth_multiplier=1.0,
+        resolution=224,
+        num_classes=num_classes,
+    )  # EfficientNet-B0
+
+
+def efficientnet_b1(num_classes=1000):
+    return EfficientNet(
+        width_multiplier=1.0,
+        depth_multiplier=1.1,
+        resolution=240,
+        num_classes=num_classes,
+    )  # EfficientNet-B1
+
+
+def efficientnet_b2(num_classes=1000):
+    return EfficientNet(
+        width_multiplier=1.1,
+        depth_multiplier=1.2,
+        resolution=260,
+        num_classes=num_classes,
+    )  # EfficientNet-B2
+
+
+def efficientnet_b3(num_classes=1000):
+    return EfficientNet(
+        width_multiplier=1.2,
+        depth_multiplier=1.4,
+        resolution=300,
+        num_classes=num_classes,
+    )  # EfficientNet-B3
+
+
+def efficientnet_b4(num_classes=1000):
+    return EfficientNet(
+        width_multiplier=1.4,
+        depth_multiplier=1.8,
+        resolution=380,
+        num_classes=num_classes,
+    )  # EfficientNet-B4
+
+
+def efficientnet_b5(num_classes=1000):
+    return EfficientNet(
+        width_multiplier=1.6,
+        depth_multiplier=2.2,
+        resolution=456,
+        num_classes=num_classes,
+    )  # EfficientNet-B5
+
+
+def efficientnet_b6(num_classes=1000):
+    return EfficientNet(
+        width_multiplier=1.8,
+        depth_multiplier=2.6,
+        resolution=528,
+        num_classes=num_classes,
+    )  # EfficientNet-B6
+
+
+def efficientnet_b7(num_classes=1000):
+    return EfficientNet(
+        width_multiplier=2.0,
+        depth_multiplier=3.1,
+        resolution=600,
+        num_classes=num_classes,
+    )  # EfficientNet-B7
+```
+
+不同版本的缩放参数如下：
+
+| 模型 | 宽度系数 | 深度系数 | 分辨率 | Top-1 精度 |
+|------|---------|---------|--------|-----------|
+| B0   | 1.0     | 1.0     | 224    | 77.1%     |
+| B1   | 1.0     | 1.1     | 240    | 79.1%     |
+| B2   | 1.1     | 1.2     | 260    | 80.1%     |
+| B3   | 1.2     | 1.4     | 300    | 81.6%     |
+| B4   | 1.4     | 1.8     | 380    | 82.9%     |
+| B5   | 1.6     | 2.2     | 456    | 83.6%     |
+| B6   | 1.8     | 2.6     | 528    | 84.0%     |
+| B7   | 2.0     | 3.1     | 600    | 84.3%     |
+
+---
+
+## 7. 测试模型
+
+```python
+model = efficientnet_b0(
+    num_classes=10,
+)  # 创建 10 分类的 EfficientNet-B0
+
+x = torch.randn(
+    2,
+    3,
+    224,
+    224,
+)  # 创建两张随机 RGB 图片
+
+output = model(x)  # 前向传播
+
+print(output.shape)  # 输出 torch.Size([2, 10])
+```
+
+---
+
+## 8. EfficientNet 的尺寸变化
+
+输入为 `(batch, 3, 224, 224)`，使用 EfficientNet-B0：
+
+```
+输入图片                    (batch, 3, 224, 224)
+
+Conv3×3，stride=2          (batch, 32, 112, 112)
+
+Stage 1 MBConv×1           (batch, 16, 112, 112)
+
+Stage 2 MBConv×2           (batch, 24, 56, 56)
+
+Stage 3 MBConv×2           (batch, 40, 28, 28)
+
+Stage 4 MBConv×3           (batch, 80, 14, 14)
+
+Stage 5 MBConv×3           (batch, 112, 14, 14)
+
+Stage 6 MBConv×4           (batch, 192, 7, 7)
+
+Stage 7 MBConv×1           (batch, 320, 7, 7)
+
+Conv1×1                    (batch, 1280, 7, 7)
+
+AdaptiveAvgPool            (batch, 1280, 1, 1)
+
+Flatten                    (batch, 1280)
+
+Linear                     (batch, num_classes)
+```
+
+---
+
+## 9. 常见错误
+
+### 扩展倍率为 1 时的处理
+
+当 `expand_ratio = 1` 时，不需要扩展层，应使用 `nn.Identity()`：
+
+```python
+# 正确写法
+if expand_ratio != 1:
+    self.expand_conv = ConvBlock(in_channels, expanded_channels, kernel_size=1)
+else:
+    self.expand_conv = nn.Identity()
+
+# 错误写法：即使 expand_ratio=1 也添加卷积层，浪费计算
+self.expand_conv = ConvBlock(in_channels, expanded_channels, kernel_size=1)
+```
+
+### 深度卷积的 groups 参数
+
+深度卷积需要为每个通道独立卷积：
+
+```python
+# 正确写法
+self.depthwise_conv = ConvBlock(
+    expanded_channels,
+    expanded_channels,
+    kernel_size,
+    groups=expanded_channels,  # groups = 输入通道数 = 输出通道数
+)
+
+# 错误写法：group 数不是通道数，变成了普通卷积
+self.depthwise_conv = ConvBlock(
+    expanded_channels,
+    expanded_channels,
+    kernel_size,
+    groups=1,  # 错误！这是标准卷积
+)
+```
+
+### 残差连接的条件
+
+MBConv 只在步长为 1 且输入输出通道数相同时使用残差连接：
+
+```python
+# 正确写法
+self.use_residual = (stride == 1 and in_channels == out_channels)
+
+# 错误写法：无条件使用残差连接会导致通道数或尺寸不匹配
+self.use_residual = True
+```
+
+### 通道数取整规则
+
+EfficientNet 要求通道数缩放后取整到 4 的倍数（硬件优化）：
+
+```python
+# 正确写法
+self._round_channels = lambda x: int((x * width_multiplier + 0.5) // 4 * 4)
+
+# 错误写法：直接取整，可能不是 4 的倍数
+self._round_channels = lambda x: int(x * width_multiplier)
+```
+
+---
+
+## 10. 重点总结
+
+复合缩放公式：
+
+```
+depth:   d = α^φ
+width:   w = β^φ
+resolution: r = γ^φ
+约束：α · β² · γ² ≈ 2
+```
+
+MBConv 结构（反向残差 + 深度卷积 + SE）：
+
+```
+输入
+  ↓（可选扩展）1×1 卷积，通道数 × expand_ratio
+  ↓ Depthwise Conv（逐通道卷积）
+  ↓ SE 注意力（通道加权）
+  ↓ 1×1 卷积，通道数降为 out_channels
+  ↓ + 输入（残差连接，仅在 stride=1 且通道数不变时）
+输出
+```
+
+MBConv 与 ResNet 残差块的对比：
+
+```
+ResNet 残差块：输入 256 → 1×1 降维到 64 → 3×3 → 1×1 升维到 256（沙漏形）
+
+MBConv 反向残差：输入 32 → 1×1 升维到 192 → 3×3 深度卷积 → 1×1 降维到 16（纺锤形）
+```
+
+总结：
+
+```
+EfficientNet 通过复合缩放统一调整深度、宽度和分辨率，在提升精度的同时保持高效。
+MBConv 模块结合了反向残差、深度可分离卷积和 SE 注意力，是 EfficientNet 的核心构建块。
+从 B0 到 B7，网络在三个维度上协同增长，实现了 SOTA 精度与计算效率的平衡。
+```
+
+
+
+
+
+# PyTorch Image Captioning 教程笔记
+
+本笔记对应 Aladdin Persson 的 [Pytorch Image Captioning Tutorial](https://www.youtube.com/watch?v=y2BaTt1fxJU)，使用 Flickr8k 数据集，构建一个由 CNN 编码器和 LSTM 解码器组成的图像描述模型。
+
+---
+
+## 1. 什么是 Image Captioning？
+
+Image Captioning 的任务是：
+
+```
+输入一张图片
+      ↓
+生成一段描述图片内容的文字
+```
+
+例如：
+
+```
+图片：一只狗在草地上奔跑
+生成文本：a dog is running on the grass
+```
+
+它结合了两个方向：
+
+```
+计算机视觉：理解图片内容
+自然语言处理：生成描述文字
+```
+
+基本结构：
+
+```
+图片
+  ↓
+CNN Encoder
+  ↓
+图像特征向量
+  ↓
+LSTM Decoder
+  ↓
+逐词生成 Caption
+```
+
+---
+
+## 2. Encoder-Decoder 结构
+
+### Encoder
+
+Encoder 使用 CNN 从图片中提取特征：
+
+```
+图片 → CNN → 图像特征向量
+```
+
+通常可以使用预训练的 ResNet、Inception 等模型，并移除最后的分类层。
+
+### Decoder
+
+Decoder 使用 LSTM 根据图像特征和之前生成的单词，预测下一个单词：
+
+```
+图像特征 + <START>
+      ↓
+预测第一个单词
+      ↓
+继续输入前一个单词
+      ↓
+预测下一个单词
+      ↓
+直到生成 <END>
+```
+
+---
+
+## 3. 文本词表
+
+模型不能直接处理字符串，因此需要建立词表：
+
+```
+单词 → 整数编号
+```
+
+通常需要加入特殊标记：
+
+```
+<PAD>    → 补齐不同长度的句子
+<START>  → 表示句子开始
+<END>    → 表示句子结束
+<UNK>    → 表示未知单词
+```
+
+示例：
+
+```
+原始句子：
+a dog is running
+
+加入特殊标记：
+<START> a dog is running <END>
+
+转换为编号：
+[1, 5, 8, 12, 20, 2]
+```
+
+一个简单的词表实现：
+
+```
+class Vocabulary:
+    def __init__(self, frequency_threshold):
+        self.itos = {
+            0: "<PAD>",
+            1: "<START>",
+            2: "<END>",
+            3: "<UNK>",
+        }  # 根据编号获取单词
+
+        self.stoi = {
+            "<PAD>": 0,
+            "<START>": 1,
+            "<END>": 2,
+            "<UNK>": 3,
+        }  # 根据单词获取编号
+
+        self.frequency_threshold = frequency_threshold  # 最低词频要求
+
+    def __len__(self):
+        return len(self.itos)  # 返回词表大小
+
+    def tokenizer(self, text):
+        return text.lower().split()  # 转为小写并按空格分词
+
+    def build_vocabulary(self, sentence_list):
+        frequencies = {}  # 保存每个单词出现的次数
+        index = 4  # 普通单词从编号 4 开始
+
+        for sentence in sentence_list:
+            for word in self.tokenizer(sentence):
+                frequencies[word] = frequencies.get(word, 0) + 1  # 统计词频
+
+        for word, frequency in frequencies.items():
+            if frequency >= self.frequency_threshold:
+                self.stoi[word] = index  # 保存单词到编号的映射
+                self.itos[index] = word  # 保存编号到单词的映射
+                index += 1  # 更新下一个编号
+
+    def numericalize(self, text):
+        tokens = self.tokenizer(text)  # 对句子进行分词
+
+        return [
+            self.stoi.get(
+                token,
+                self.stoi["<UNK>"],
+            )
+            for token in tokens
+        ]  # 将每个单词转换为编号
+```
+
+---
+
+## 4. 自定义 Caption Dataset
+
+每个样本通常包含：
+
+```
+图片路径
+图片对应的描述文本
+```
+
+`Dataset` 读取图片并将描述转换为编号：
+
+```
+from PIL import Image  # 用于读取图片
+import torch  # 导入 PyTorch
+from torch.utils.data import Dataset  # 导入 Dataset 基类
+
+
+class CaptionDataset(Dataset):
+    def __init__(self, dataframe, transform=None):
+        self.dataframe = dataframe  # 保存图片路径和描述文本
+        self.transform = transform  # 保存图片预处理方法
+
+        self.vocab = Vocabulary(
+            frequency_threshold=5
+        )  # 创建词表
+
+        self.vocab.build_vocabulary(
+            dataframe["caption"].tolist()
+        )  # 使用所有描述文本构建词表
+
+    def __len__(self):
+        return len(self.dataframe)  # 返回样本数量
+
+    def __getitem__(self, index):
+        row = self.dataframe.iloc[index]  # 获取一个样本
+
+        image = Image.open(row["image"]).convert("RGB")  # 读取图片并转换为 RGB
+        caption = row["caption"]  # 获取图片描述文本
+
+        if self.transform is not None:
+            image = self.transform(image)  # 对图片进行预处理
+
+        numericalized_caption = [
+            self.vocab.stoi["<START>"]
+        ]  # 添加句子开始标记
+
+        numericalized_caption += self.vocab.numericalize(
+            caption
+        )  # 将描述文本转换为单词编号
+
+        numericalized_caption.append(
+            self.vocab.stoi["<END>"]
+        )  # 添加句子结束标记
+
+        return image, torch.tensor(
+            numericalized_caption,
+            dtype=torch.long,
+        )  # 返回图片和 caption 编号
+```
+
+---
+
+## 5. 处理不同长度的 Caption
+
+不同图片的描述长度通常不同：
+
+```
+a dog runs                  → 长度 3
+a small dog runs on grass   → 长度 5
+```
+
+一个 batch 中的序列需要补齐到相同长度。
+
+```
+from torch.nn.utils.rnn import pad_sequence  # 导入序列补齐函数
+
+
+def caption_collate_fn(batch):
+    images = []  # 保存图片
+    captions = []  # 保存描述序列
+
+    for image, caption in batch:
+        images.append(image)  # 添加图片
+        captions.append(caption)  # 添加 caption
+
+    images = torch.stack(images)  # 将图片组合成批次
+    captions = pad_sequence(
+        captions,
+        batch_first=True,
+        padding_value=0,
+    )  # 使用 <PAD> 编号 0 补齐序列
+
+    return images, captions  # 返回图片批次和 caption 批次
+```
+
+补齐示例：
+
+```
+[<START>, a, dog, <END>]
+
+[<START>, a, small, dog, runs, <END>]
+```
+
+补齐后：
+
+```
+[
+    [<START>, a, dog, <END>, <PAD>, <PAD>],
+    [<START>, a, small, dog, runs, <END>]
+]
+```
+
+---
+
+## 6. CNN Encoder
+
+Encoder 使用 CNN 提取图像特征。
+
+```
+import torch.nn as nn  # 导入神经网络模块
+import torchvision.models as models  # 导入 torchvision 模型
+
+
+class EncoderCNN(nn.Module):
+    def __init__(self, embed_size):
+        super(EncoderCNN, self).__init__()  # 初始化父类
+
+        resnet = models.resnet50(
+            weights=models.ResNet50_Weights.DEFAULT
+        )  # 加载预训练 ResNet-50
+
+        modules = list(
+            resnet.children()
+        )[:-1]  # 移除最后的分类层
+
+        self.resnet = nn.Sequential(
+            *modules
+        )  # 保留 CNN 特征提取部分
+
+        self.linear = nn.Linear(
+            resnet.fc.in_features,
+            embed_size,
+        )  # 将 CNN 特征映射到指定维度
+
+        self.bn = nn.BatchNorm1d(
+            embed_size,
+            momentum=0.01,
+        )  # 对图像特征进行归一化
+
+    def forward(self, images):
+        with torch.no_grad():
+            features = self.resnet(images)  # 使用 ResNet 提取图像特征
+
+        features = features.reshape(
+            features.size(0),
+            -1,
+        )  # 将 (batch, 2048, 1, 1) 展平为 (batch, 2048)
+
+        features = self.linear(features)  # 将 CNN 特征映射到 embed_size
+        features = self.bn(features)  # 对特征进行 BatchNorm
+
+        return features  # 返回图像特征
+```
+
+如果希望微调整个 CNN，可以移除：
+
+```
+with torch.no_grad():
+```
+
+并将 CNN 参数设置为可训练。
+
+---
+
+## 7. LSTM Decoder
+
+Decoder 接收图像特征和 Caption 前面的单词，预测下一个单词。
+
+```
+class DecoderRNN(nn.Module):
+    def __init__(
+        self,
+        embed_size,
+        hidden_size,
+        vocab_size,
+        num_layers,
+    ):
+        super(DecoderRNN, self).__init__()  # 初始化父类
+
+        self.embed = nn.Embedding(
+            vocab_size,
+            embed_size,
+        )  # 将单词编号转换为词向量
+
+        self.lstm = nn.LSTM(
+            embed_size,
+            hidden_size,
+            num_layers,
+            batch_first=True,
+        )  # 创建 LSTM 解码器
+
+        self.linear = nn.Linear(
+            hidden_size,
+            vocab_size,
+        )  # 将 LSTM 输出映射为词表大小的分数
+
+        self.dropout = nn.Dropout(
+            p=0.5
+        )  # 防止解码器过拟合
+
+    def forward(self, features, captions):
+        embeddings = self.dropout(
+            self.embed(captions)
+        )  # 将 caption 编号转换为词向量
+
+        features = features.unsqueeze(1)  # 将图像特征变为 (batch, 1, embed_size)
+
+        embeddings = torch.cat(
+            (features, embeddings),
+            dim=1,
+        )  # 将图像特征放在序列最前面
+
+        hiddens, _ = self.lstm(
+            embeddings
+        )  # 使用 LSTM 处理图像特征和文本序列
+
+        outputs = self.linear(
+            hiddens
+        )  # 为每个时间步预测下一个单词
+
+        return outputs  # 返回每个时间步的词汇分数
+```
+
+输入输出形状：
+
+```
+features：
+(batch, embed_size)
+
+captions：
+(batch, sequence_length)
+
+embeddings：
+(batch, sequence_length, embed_size)
+
+outputs：
+(batch, sequence_length + 1, vocab_size)
+```
+
+---
+
+## 8. Encoder-Decoder 模型
+
+```
+class CNNtoRNN(nn.Module):
+    def __init__(
+        self,
+        embed_size,
+        hidden_size,
+        vocab_size,
+        num_layers,
+    ):
+        super(CNNtoRNN, self).__init__()  # 初始化父类
+
+        self.encoder = EncoderCNN(
+            embed_size
+        )  # 创建 CNN 编码器
+
+        self.decoder = DecoderRNN(
+            embed_size,
+            hidden_size,
+            vocab_size,
+            num_layers,
+        )  # 创建 LSTM 解码器
+
+    def forward(self, images, captions):
+        features = self.encoder(images)  # 从图片中提取特征
+
+        outputs = self.decoder(
+            features,
+            captions,
+        )  # 根据图像特征和 caption 生成词汇分数
+
+        return outputs  # 返回预测结果
+```
+
+---
+
+## 9. Teacher Forcing
+
+训练时，通常使用 Teacher Forcing：
+
+```
+输入：
+<START> a dog is
+
+目标：
+a dog is running <END>
+```
+
+代码中使用：
+
+```
+captions[:, :-1]
+```
+
+作为输入：
+
+```
+inputs = captions[:, :-1]  # 去掉最后一个 token，作为模型输入
+targets = captions[:, 1:]  # 去掉第一个 token，作为预测目标
+```
+
+这样模型在每个时间步都使用真实的前一个单词，而不是使用自己上一步预测的单词。
+
+训练代码：
+
+```
+for images, captions in train_loader:
+    images = images.to(device)  # 将图片移动到设备
+    captions = captions.to(device)  # 将 caption 移动到设备
+
+    outputs = model(
+        images,
+        captions[:, :-1],
+    )  # 使用除最后一个 token 外的 caption 作为输入
+
+    outputs = outputs[:, 1:, :]  # 去掉图像特征对应的第一个输出
+
+    targets = captions[:, 1:]  # 目标是从第二个 token 开始的 caption
+
+    loss = criterion(
+        outputs.reshape(-1, outputs.size(2)),
+        targets.reshape(-1),
+    )  # 展平后计算每个时间步的交叉熵损失
+
+    optimizer.zero_grad()  # 清除旧梯度
+    loss.backward()  # 反向传播
+    optimizer.step()  # 更新模型参数
+```
+
+损失函数：
+
+```
+criterion = nn.CrossEntropyLoss(
+    ignore_index=0
+)  # 忽略 <PAD> 位置的损失
+```
+
+因为 `0` 是 `<PAD>` 的编号，不应该让补齐位置影响训练。
+
+---
+
+## 10. 推理阶段逐词生成
+
+训练阶段可以使用完整 Caption，但推理时没有真实 Caption，只能根据模型上一步输出的单词继续生成。
+
+流程：
+
+```
+输入图片
+  ↓
+生成 <START>
+  ↓
+预测下一个单词
+  ↓
+把预测单词重新输入模型
+  ↓
+继续预测
+  ↓
+生成 <END> 或达到最大长度
+```
+
+一个简单的贪心搜索实现：
+
+```
+def caption_image(
+    model,
+    image,
+    vocabulary,
+    max_length=50,
+):
+    model.eval()  # 切换到评估模式
+
+    result = []  # 保存生成的单词
+    device = next(model.parameters()).device  # 获取模型所在设备
+
+    with torch.inference_mode():
+        features = model.encoder(
+            image.unsqueeze(0).to(device)
+        )  # 使用 CNN 提取单张图片特征
+
+        states = None  # 初始化 LSTM 隐藏状态
+
+        for _ in range(max_length):
+            if len(result) == 0:
+                word_id = torch.tensor(
+                    [vocabulary.stoi["<START>"]],
+                    device=device,
+                )  # 第一步输入 <START>
+            else:
+                word_id = torch.tensor(
+                    [vocabulary.stoi[result[-1]]],
+                    device=device,
+                )  # 后续输入上一步生成的单词
+
+            embeddings = model.decoder.embed(
+                word_id
+            ).unsqueeze(1)  # 将当前单词转换为词向量
+
+            if states is None:
+                lstm_input = torch.cat(
+                    [features.unsqueeze(1), embeddings],
+                    dim=1,
+                )  # 第一步同时输入图像特征和 <START>
+            else:
+                lstm_input = embeddings  # 后续时间步只输入当前单词
+
+            output, states = model.decoder.lstm(
+                lstm_input,
+                states,
+            )  # 使用 LSTM 生成当前时间步输出
+
+            scores = model.decoder.linear(
+                output[:, -1, :]
+            )  # 将 LSTM 输出映射为词表分数
+
+            predicted_id = scores.argmax(
+                dim=1
+            ).item()  # 选择分数最高的单词编号
+
+            predicted_word = vocabulary.itos[
+                predicted_id
+            ]  # 将编号转换回单词
+
+            if predicted_word == "<END>":
+                break  # 生成结束标记时停止
+
+            result.append(predicted_word)  # 保存生成的单词
+
+    model.train()  # 恢复训练模式
+    return result  # 返回生成的单词列表
+```
+
+需要注意：上面代码是为了说明生成过程。实际工程中，通常会使用更清晰的 token ID 列表，而不是用生成出的单词再次查找编号。
+
+---
+
+## 11. 训练和推理的区别
+
+|阶段|输入|生成方式|
+|---|---|---|
+|训练|真实 Caption|Teacher Forcing|
+|验证|图片和 `<START>`|逐词生成|
+|推理|只有图片|逐词生成|
+
+训练阶段：
+
+```
+真实前一个单词 → 预测下一个单词
+```
+
+推理阶段：
+
+```
+模型上一步预测的单词 → 预测下一个单词
+```
+
+---
+
+## 12. 训练时的完整核心代码
+
+```
+device = torch.device(
+    "cuda" if torch.cuda.is_available() else "cpu"
+)  # 选择运行设备
+
+embed_size = 256  # 图像特征和词向量维度
+hidden_size = 256  # LSTM 隐藏状态维度
+num_layers = 1  # LSTM 层数
+learning_rate = 0.001  # 学习率
+num_epochs = 10  # 训练轮数
+
+model = CNNtoRNN(
+    embed_size=embed_size,
+    hidden_size=hidden_size,
+    vocab_size=len(train_dataset.vocab),
+    num_layers=num_layers,
+).to(device)  # 创建并移动模型
+
+criterion = nn.CrossEntropyLoss(
+    ignore_index=0
+)  # 忽略 <PAD> 位置的损失
+
+optimizer = torch.optim.Adam(
+    model.parameters(),
+    lr=learning_rate,
+)  # 创建 Adam 优化器
+
+for epoch in range(num_epochs):
+    model.train()  # 切换到训练模式
+
+    for images, captions in train_loader:
+        images = images.to(device)  # 移动图片
+        captions = captions.to(device)  # 移动 caption
+
+        outputs = model(
+            images,
+            captions[:, :-1],
+        )  # 使用 teacher forcing 进行训练
+
+        outputs = outputs[:, 1:, :]  # 对齐预测时间步
+
+        targets = captions[:, 1:]  # 目标为后移一位的真实 caption
+
+        loss = criterion(
+            outputs.reshape(-1, outputs.size(2)),
+            targets.reshape(-1),
+        )  # 计算所有时间步的交叉熵损失
+
+        optimizer.zero_grad()  # 清除旧梯度
+        loss.backward()  # 反向传播
+
+        torch.nn.utils.clip_grad_norm_(
+            model.parameters(),
+            max_norm=5.0,
+        )  # 防止 LSTM 出现梯度爆炸
+
+        optimizer.step()  # 更新模型参数
+
+    print(
+        f"Epoch [{epoch + 1}/{num_epochs}], "
+        f"Loss: {loss.item():.4f}"
+    )  # 输出当前训练损失
+```
+
+---
+
+## 13. 图像预处理
+
+如果 Encoder 使用 ImageNet 预训练 ResNet，图片通常需要：
+
+```
+from torchvision import transforms  # 导入图像转换工具
+
+
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),  # 调整图片大小
+    transforms.ToTensor(),  # 转换为张量
+    transforms.Normalize(
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225],
+    ),  # 使用 ImageNet 的标准化参数
+])
+```
+
+输入图片形状：
+
+```
+(batch_size, 3, 224, 224)
+```
+
+---
+
+## 14. 常见问题
+
+### 忘记加入 `<START>` 和 `<END>`
+
+模型需要知道：
+
+```
+什么时候开始生成
+什么时候停止生成
+```
+
+因此每个 Caption 都应该包含：
+
+```
+<START> ... <END>
+```
+
+### 没有忽略 `<PAD>` 损失
+
+应该使用：
+
+```
+nn.CrossEntropyLoss(ignore_index=0)
+```
+
+否则模型会被要求学习大量没有意义的填充位置。
+
+### 训练和推理逻辑混淆
+
+训练时可以使用真实 Caption：
+
+```
+captions[:, :-1]
+```
+
+推理时没有真实 Caption，只能逐词生成。
+
+### CNN 特征维度不匹配
+
+如果使用 ResNet-50，去掉分类层后通常得到：
+
+```
+(batch, 2048, 1, 1)
+```
+
+展平后是：
+
+```
+(batch, 2048)
+```
+
+因此需要：
+
+```
+nn.Linear(2048, embed_size)
+```
+
+### 生成句子无限循环
+
+推理时要设置最大生成长度：
+
+```
+max_length=50
+```
+
+并在生成 `<END>` 时停止：
+
+```
+if predicted_word == "<END>":
+    break
+```
+
+---
+
+## 15. 模型流程总结
+
+```
+图片
+(3, 224, 224)
+      ↓
+CNN Encoder
+      ↓
+图像特征
+(embed_size,)
+      ↓
+加入 <START>
+      ↓
+LSTM Decoder
+      ↓
+预测单词
+      ↓
+继续输入上一个单词
+      ↓
+直到生成 <END>
+```
+
+训练过程：
+
+```
+图片 + 真实 Caption
+        ↓
+CNN 提取图像特征
+        ↓
+LSTM 逐时间步预测单词
+        ↓
+CrossEntropyLoss
+        ↓
+反向传播更新 CNN 和 LSTM
+```
+
+一句话总结：
+
+```
+Image Captioning 本质上是一个 Encoder-Decoder 模型：
+CNN 将图片转换为特征，LSTM 根据图像特征逐词生成描述。
+```
+
+可进一步改进：
+
+```
+使用更大的预训练 CNN
+增加训练轮数
+使用 Attention 让模型关注图片不同区域
+使用 Beam Search 代替简单的贪心搜索
+使用 Transformer Decoder
+```
+
+
+# PyTorch 实现 Neural Style Transfer（神经风格迁移）
+
+神经风格迁移（Neural Style Transfer，NST）是 2015 年由 Leon A. Gatys 等人提出的图像生成技术，核心思想是将一张图片的“内容”与另一张图片的“艺术风格”融合在一起，生成一幅全新的图像。原始论文：[A Neural Algorithm of Artistic Style](https://arxiv.org/abs/1508.06576)
+
+---
+
+## 1. 核心思想：内容 + 风格 = 生成图像
+
+风格迁移算法需要三张图片：
+
+```
+内容图片（Content Image）  +  风格图片（Style Image）  →  生成图片（Generated Image）
+    （保留物体/场景结构）        （保留色彩/纹理/笔触）       （两者的融合）
+```
+
+算法的工作流程如下：
+
+```
+输入：内容图片 C、风格图片 S、随机初始化的生成图片 G
+    ↓
+用预训练的 VGG19 分别提取三张图片的特征
+    ↓
+计算内容损失：衡量 G 与 C 在高层特征上的差异
+计算风格损失：衡量 G 与 S 在风格特征上的差异
+    ↓
+总损失 = 内容损失 + 风格损失
+    ↓
+反向传播，更新生成图片 G 的像素值
+    ↓
+重复迭代，直到 G 同时保留 C 的内容和 S 的风格
+```
+
+原理很简单：定义两个距离，内容距离 \( D_C \) 衡量两张图像内容的差异，风格距离 \( D_S \) 衡量两张图像风格的差异。然后不断调整生成图片，使其与内容图片的内容距离最小化，同时与风格图片的风格距离最小化。
+
+---
+
+## 2. VGG19 作为特征提取器
+
+风格迁移使用在 ImageNet 上预训练的 VGG19 网络来提取图像特征。
+
+### 2.1 为什么选择 VGG19？
+
+- VGG19 的卷积层能提取从低级（边缘、颜色）到高级（物体形状）的特征
+- 不同层捕获的信息不同：**浅层**捕获纹理、颜色等风格信息，**深层**捕获物体、布局等内容信息
+- 预训练模型已经学会了如何“理解”图像内容
+
+### 2.2 VGG19 的层结构
+
+```
+VGG19 结构（只取卷积层，舍弃全连接层）：
+
+Layer 0:  Conv2d (3 → 64)
+Layer 1:  ReLU
+Layer 2:  Conv2d (64 → 64)
+Layer 3:  ReLU
+Layer 4:  MaxPool2d
+Layer 5:  Conv2d (64 → 128)
+Layer 6:  ReLU
+Layer 7:  Conv2d (128 → 128)
+Layer 8:  ReLU
+Layer 9:  MaxPool2d
+Layer 10: Conv2d (128 → 256)
+Layer 11: ReLU
+Layer 12: Conv2d (256 → 256)
+Layer 13: ReLU
+Layer 14: Conv2d (256 → 256)
+Layer 15: ReLU
+Layer 16: Conv2d (256 → 256)
+Layer 17: ReLU
+Layer 18: MaxPool2d
+Layer 19: Conv2d (256 → 512)
+Layer 20: ReLU
+Layer 21: Conv2d (512 → 512)
+Layer 22: ReLU
+Layer 23: Conv2d (512 → 512)
+Layer 24: ReLU
+Layer 25: Conv2d (512 → 512)
+Layer 26: ReLU
+Layer 27: MaxPool2d
+Layer 28: Conv2d (512 → 512)
+Layer 29: ReLU
+Layer 30: Conv2d (512 → 512)
+Layer 31: ReLU
+Layer 32: Conv2d (512 → 512)
+Layer 33: ReLU
+Layer 34: Conv2d (512 → 512)
+Layer 35: ReLU
+Layer 36: MaxPool2d
+```
+
+---
+
+## 3. 内容损失（Content Loss）
+
+内容损失衡量生成图片与内容图片在**高层语义特征**上的差异。使用的是 VGG19 中较深层（如 `conv4_2`）的特征图。
+
+### 3.1 原理
+
+- 高层特征图保留了图像的**物体形状和布局**信息
+- 通过最小化内容损失，让生成图片“继承”内容图片的物体结构
+- 使用 **MSE 损失**计算特征图之间的差异
+
+### 3.2 公式
+
+```
+F_content = VGG(content_image)[content_layer]   # 内容图片的特征
+F_gen = VGG(generated_image)[content_layer]     # 生成图片的特征
+
+Content_Loss = mean((F_content - F_gen)²)
+```
+
+### 3.3 代码实现
+
+```python
+def content_loss(content_features, generated_features):
+    # content_features: 内容图片在某一层的特征图
+    # generated_features: 生成图片在同一层的特征图
+    return torch.mean((content_features - generated_features) ** 2)
+```
+
+---
+
+## 4. 风格损失（Style Loss）
+
+风格损失衡量生成图片与风格图片在**风格特征**上的差异。风格由特征图之间的**相关性（Gram 矩阵）**来表示。
+
+### 4.1 为什么用 Gram 矩阵？
+
+- 特征图的每个通道可以看作一种“风格滤波器”（如纹理、颜色倾向）
+- 不同通道之间的相关性（共现关系）就构成了风格
+- Gram 矩阵计算的是**通道之间的内积**，捕获了“哪些风格特征同时出现”
+
+### 4.2 Gram 矩阵的计算
+
+```
+输入特征图 F: (C, H, W)  # C 个通道，每个通道 H×W
+
+1. 将 F 重塑为 (C, H×W)
+2. Gram = F @ F.T  # (C, C) 矩阵
+
+Gram[i, j] = sum(F[i, :] * F[j, :])  # 通道 i 和通道 j 的相关性
+```
+
+### 4.3 多层风格损失
+
+风格不只由一层决定，通常使用**多个层**（如 `conv1_2`、`conv2_2`、`conv3_2`、`conv4_2`、`conv5_2`）的风格损失之和，每层赋予不同的权重。
+
+### 4.4 公式
+
+```
+对于每一层 l：
+  Gram_style_l = Gram(VGG(style_image)[l])
+  Gram_gen_l = Gram(VGG(generated_image)[l])
+  Layer_Style_Loss_l = mean((Gram_style_l - Gram_gen_l)²) / (C_l * H_l * W_l)²
+
+Total_Style_Loss = sum(w_l * Layer_Style_Loss_l)
+```
+
+### 4.5 代码实现
+
+```python
+def gram_matrix(features):
+    # features: (batch_size, channels, height, width)
+    batch_size, channels, h, w = features.size()
+    features = features.view(batch_size, channels, h * w)  # 展平空间维度
+    gram = torch.bmm(features, features.transpose(1, 2))   # 批量矩阵乘法
+    return gram / (channels * h * w)  # 归一化
+
+def style_loss(style_features, generated_features):
+    # style_features: 风格图片在某一层的特征图
+    # generated_features: 生成图片在同一层的特征图
+    gram_style = gram_matrix(style_features)
+    gram_gen = gram_matrix(generated_features)
+    return torch.mean((gram_style - gram_gen) ** 2)
+```
+
+---
+
+## 5. 总损失与优化
+
+### 5.1 总损失公式
+
+```
+Total_Loss = α * Content_Loss + β * Style_Loss
+```
+
+- α（内容权重）：控制生成图片保留多少内容
+- β（风格权重）：控制生成图片采用多少风格
+- 通常 α/β 的比例决定了最终效果，常见设置：α = 1，β = 1e6（因为风格损失的值通常比内容损失小很多）
+
+### 5.2 优化器
+
+与常规训练不同，风格迁移**不更新模型参数**，而是**更新生成图片的像素值**：
+
+```python
+# 生成图片作为可训练参数
+generated_image = content_image.clone().requires_grad_(True)
+
+# 使用 Adam 或 L-BFGS 优化器
+optimizer = optim.Adam([generated_image], lr=0.01)
+```
+
+### 5.3 完整训练循环
+
+```python
+for step in range(num_steps):
+    optimizer.zero_grad()
+
+    # 前向传播：提取特征
+    gen_features = model(generated_image)
+    content_features = model(content_image)
+    style_features = model(style_image)
+
+    # 计算内容损失
+    c_loss = content_loss(content_features[content_layer], gen_features[content_layer])
+
+    # 计算风格损失（多个层）
+    s_loss = 0
+    for layer in style_layers:
+        s_loss += style_loss(style_features[layer], gen_features[layer])
+
+    # 总损失
+    total_loss = alpha * c_loss + beta * s_loss
+
+    # 反向传播，更新生成图片
+    total_loss.backward()
+    optimizer.step()
+```
+
+---
+
+## 6. 完整实现
+
+### 6.1 导入必要的库
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from PIL import Image
+import matplotlib.pyplot as plt
+import torchvision.transforms as transforms
+from torchvision.models import vgg19, VGG19_Weights
+import copy
+```
+
+### 6.2 图像加载与预处理
+
+```python
+# 图像尺寸
+IMAGE_SIZE = 256
+
+# 预处理：调整大小 → 转张量 → 归一化
+transform = transforms.Compose([
+    transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225])
+])
+
+def load_image(image_path):
+    image = Image.open(image_path).convert('RGB')
+    image = transform(image).unsqueeze(0)  # 添加 batch 维度
+    return image
+
+# 加载内容图片和风格图片
+content_image = load_image('content.jpg')
+style_image = load_image('style.jpg')
+
+# 初始化生成图片为内容图片的副本（可训练）
+generated_image = content_image.clone().requires_grad_(True)
+```
+
+### 6.3 构建 VGG19 特征提取器
+
+```python
+class VGGFeatureExtractor(nn.Module):
+    def __init__(self):
+        super(VGGFeatureExtractor, self).__init__()
+        # 加载预训练 VGG19，只取特征层（不含全连接层）
+        vgg = vgg19(weights=VGG19_Weights.DEFAULT).features
+        self.model = vgg
+
+        # 冻结所有参数（不需要训练）
+        for param in self.model.parameters():
+            param.requires_grad_(False)
+
+        # 内容层和风格层的索引
+        self.content_layers = ['conv_4']
+        self.style_layers = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
+
+        # 层名到索引的映射
+        self.layer_name_map = {
+            'conv_1': 0,   # 实际为 conv1_1
+            'conv_2': 5,   # conv2_1
+            'conv_3': 10,  # conv3_1
+            'conv_4': 19,  # conv4_1
+            'conv_5': 28,  # conv5_1
+        }
+
+    def forward(self, x):
+        features = {}
+
+        # 逐层前向传播，记录需要的层的输出
+        for name, layer in self.model._modules.items():
+            x = layer(x)
+            if int(name) in [0, 5, 10, 19, 28]:
+                # 记录该层输出（对应 conv1_1, conv2_1, conv3_1, conv4_1, conv5_1）
+                layer_name = list(self.layer_name_map.keys())[
+                    [0, 5, 10, 19, 28].index(int(name))
+                ]
+                features[layer_name] = x
+
+        return features
+```
+
+### 6.4 定义损失函数
+
+```python
+def gram_matrix(features):
+    batch_size, channels, h, w = features.size()
+    features = features.view(batch_size, channels, h * w)
+    gram = torch.bmm(features, features.transpose(1, 2))
+    return gram / (channels * h * w)
+
+def content_loss(content_feat, gen_feat):
+    return torch.mean((content_feat - gen_feat) ** 2)
+
+def style_loss(style_feat, gen_feat):
+    gram_style = gram_matrix(style_feat)
+    gram_gen = gram_matrix(gen_feat)
+    return torch.mean((gram_style - gram_gen) ** 2)
+```
+
+### 6.5 训练
+
+```python
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# 移动到设备
+content_image = content_image.to(device)
+style_image = style_image.to(device)
+generated_image = generated_image.to(device)
+
+# 初始化 VGG 模型
+vgg = VGGFeatureExtractor().to(device)
+
+# 超参数
+alpha = 1.0       # 内容权重
+beta = 1e6        # 风格权重
+num_steps = 3000
+learning_rate = 0.01
+
+# 优化器：优化生成图片
+optimizer = optim.Adam([generated_image], lr=learning_rate)
+
+# 预先提取内容图片和风格图片的特征（节省计算）
+content_features = vgg(content_image)
+style_features = vgg(style_image)
+
+# 训练循环
+for step in range(num_steps):
+    optimizer.zero_grad()
+
+    # 提取生成图片的特征
+    gen_features = vgg(generated_image)
+
+    # 计算内容损失（使用 conv_4 层）
+    c_loss = content_loss(
+        content_features['conv_4'],
+        gen_features['conv_4']
+    )
+
+    # 计算风格损失（使用所有风格层）
+    s_loss = 0
+    style_layers = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
+    for layer in style_layers:
+        s_loss += style_loss(
+            style_features[layer],
+            gen_features[layer]
+        )
+
+    # 总损失
+    total_loss = alpha * c_loss + beta * s_loss
+
+    # 反向传播
+    total_loss.backward()
+    optimizer.step()
+
+    # 打印进度
+    if step % 100 == 0:
+        print(f"Step [{step}/{num_steps}], "
+              f"Content Loss: {c_loss.item():.4f}, "
+              f"Style Loss: {s_loss.item():.4f}")
+
+print("训练完成！")
+```
+
+### 6.6 显示结果
+
+```python
+def imshow(tensor, title=None):
+    # 反归一化
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+    tensor = tensor * std + mean
+    tensor = torch.clamp(tensor, 0, 1)
+
+    # 显示
+    plt.imshow(tensor.squeeze(0).permute(1, 2, 0).cpu().detach().numpy())
+    if title:
+        plt.title(title)
+    plt.show()
+
+# 显示结果
+imshow(generated_image, title="Generated Image")
+```
+
+---
+
+## 7. 常见错误
+
+### 7.1 生成图片的梯度未开启
+
+生成图片需要作为可训练参数，必须设置 `requires_grad_(True)`：
+
+```python
+# 正确写法
+generated_image = content_image.clone().requires_grad_(True)
+
+# 错误写法：无法计算梯度
+generated_image = content_image.clone()
+```
+
+### 7.2 模型参数被意外更新
+
+VGG19 的参数应该被冻结：
+
+```python
+# 正确写法
+for param in vgg.parameters():
+    param.requires_grad_(False)
+
+# 错误写法：没有冻结，会浪费计算资源
+# 默认 requires_grad=True
+```
+
+### 7.3 Gram 矩阵未归一化
+
+不同层的特征图尺寸不同，Gram 矩阵的值会随尺寸变化，需要归一化：
+
+```python
+# 正确写法
+def gram_matrix(features):
+    batch_size, channels, h, w = features.size()
+    features = features.view(batch_size, channels, h * w)
+    gram = torch.bmm(features, features.transpose(1, 2))
+    return gram / (channels * h * w)  # 归一化
+
+# 错误写法：没有归一化，不同层的损失量级差异巨大
+def gram_matrix(features):
+    features = features.view(features.size(0), features.size(1), -1)
+    return torch.bmm(features, features.transpose(1, 2))
+```
+
+### 7.4 内容层和风格层选择不当
+
+- 内容层太浅：生成图片会保留太多细节，风格迁移效果不明显
+- 内容层太深：生成图片可能丢失部分内容结构
+- 风格层太少：风格迁移不充分
+
+常用选择：
+- 内容层：`conv4_2`（或 `conv_4`）
+- 风格层：`conv1_1`、`conv2_1`、`conv3_1`、`conv4_1`、`conv5_1`
+
+### 7.5 α 和 β 的比例不当
+
+风格损失的值通常远小于内容损失（因为 Gram 矩阵的值很小），需要较大的 β 来平衡：
+
+```python
+# 常用比例
+alpha = 1.0
+beta = 1e6  # 风格损失通常比内容损失小 1e6 倍
+
+# 如果风格迁移效果不明显，尝试增大 beta
+# 如果内容丢失严重，尝试增大 alpha
+```
+
+---
+
+## 8. 可能的改进方向
+
+- **总变差正则化（Total Variation Regularization）**：减少生成图片中的高频噪声，使图像更平滑。
+- **使用更快的风格迁移方法**：如 AdaIN（Adaptive Instance Normalization），训练一个前馈网络，一次前向传播即可完成风格迁移。
+- **多风格迁移**：同时学习多种风格，在推理时选择任意风格组合。
+- **内容与风格的动态平衡**：在训练过程中逐渐调整 α 和 β 的比例。
+
+---
+
+## 9. 重点总结
+
+任务本质：
+
+```
+风格迁移 = 保留内容图片的物体结构 + 采用风格图片的色彩/纹理/笔触
+```
+
+核心公式：
+
+```
+Total_Loss = α × Content_Loss + β × Style_Loss
+```
+
+内容损失：
+
+```
+使用 VGG 深层特征，MSE 损失
+保留物体形状和布局
+```
+
+风格损失：
+
+```
+使用 Gram 矩阵（通道间相关性），MSE 损失
+捕获纹理、颜色、笔触等风格信息
+```
+
+训练方式：
+
+```
+不更新模型参数，更新生成图片的像素值
+生成图片作为可训练参数（requires_grad=True）
+```
+
+关键点：
+
+```
+VGG19 作为固定的特征提取器（参数冻结）
+风格损失使用多层特征的 Gram 矩阵
+α 和 β 的比例需要调整（β 通常远大于 α）
+```
+
+总结：
+
+```
+神经风格迁移通过预训练的 VGG19 提取图像的内容特征和风格特征，
+定义内容损失和风格损失，然后通过梯度下降优化生成图片的像素值，
+使其同时具备内容图片的物体结构和风格图片的艺术风格。
+```
+
+
+# PyTorch 实现 Simple GAN（生成对抗网络）
+
+生成对抗网络（Generative Adversarial Network，GAN）是 2014 年由 Ian Goodfellow 等人提出的生成模型，核心思想是通过两个神经网络的“对抗”训练，让模型学会生成与真实数据分布相似的新样本。本笔记参考 Aladdin Persson 的教程，使用全连接层在 MNIST 数据集上实现一个最简单的 GAN。
+
+---
+
+## 1. GAN 的核心思想
+
+GAN 由两个神经网络组成，它们相互博弈、共同进步：
+
+```
+真实图片（Real Images）
+    ↓
+判别器（Discriminator）←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ←  ← 生成图片（Fake Images）
+    ↑                                                  ↑
+    │                                                  │
+    │   判断图片是“真”还是“假”                          │   试图生成以假乱真的图片
+    │                                                  │
+    └────────────────── 对抗训练 ──────────────────────┘
+```
+
+### 1.1 生成器（Generator）
+
+生成器的作用是将随机噪声（Random Noise）转化为“以假乱真”的图片：
+
+```
+随机噪声向量 z（如 64 维） →  生成器 G  →  生成的图片（如 784 维）
+```
+
+- 输入：从一个简单的分布（如标准正态分布）中采样的随机向量 z
+- 输出：一张与真实图片尺寸相同的“假图片”
+- 目标：骗过判别器，让判别器认为生成的图片是真实的
+
+### 1.2 判别器（Discriminator）
+
+判别器的作用是区分真实图片和生成图片：
+
+```
+输入图片（真实 or 生成） →  判别器 D  →  输出概率（0~1）
+```
+
+- 输入：一张图片（可能是真实的，也可能是生成器生成的）
+- 输出：一个 0 到 1 之间的概率值，表示输入图片是“真实”的概率
+- 目标：正确区分真实图片和生成图片
+
+### 1.3 对抗训练
+
+两个网络通过“对抗”共同进步：
+
+```
+训练判别器：
+  真实图片 → 判别器 → 希望输出 1（真实）
+  生成图片 → 判别器 → 希望输出 0（假）
+
+训练生成器：
+  随机噪声 → 生成器 → 生成图片 → 判别器 → 希望输出 1（骗过判别器）
+```
+
+这个过程可以看作一个博弈：生成器不断学习如何骗过判别器，判别器不断学习如何识破生成器，两者在对抗中共同进步。
+
+---
+
+## 2. 生成器（Generator）实现
+
+生成器使用全连接层，将随机噪声向量映射为一张图片：
+
+```python
+import torch
+import torch.nn as nn
+
+class Generator(nn.Module):
+    def __init__(self, z_dim, img_dim):
+        super(Generator, self).__init__()
+        self.gen = nn.Sequential(
+            nn.Linear(z_dim, 256),          # 输入：噪声向量 (64 维)
+            nn.LeakyReLU(0.01),             # LeakyReLU 激活
+            nn.Linear(256, img_dim),        # 输出：图片 (784 维)
+            nn.Tanh(),                      # 将输出映射到 [-1, 1]
+        )
+
+    def forward(self, x):
+        return self.gen(x)
+```
+
+生成器的结构：
+
+```
+输入：随机噪声向量 (batch_size, z_dim=64)
+    ↓
+全连接层：64 → 256
+    ↓
+LeakyReLU(0.01)
+    ↓
+全连接层：256 → 784（28×28×1）
+    ↓
+Tanh（将输出范围限制在 [-1, 1]）
+    ↓
+输出：生成的图片 (batch_size, 784)
+```
+
+关键点说明：
+
+- **LeakyReLU**：使用 LeakyReLU 而不是 ReLU，可以避免神经元死亡问题，让梯度更好地流动。
+- **Tanh**：生成器的最后一层使用 Tanh 激活函数，将输出值压缩到 [-1, 1] 之间。这也要求真实图片在预处理时被归一化到 [-1, 1]。
+
+---
+
+## 3. 判别器（Discriminator）实现
+
+判别器接收一张图片，输出一个 0 到 1 之间的概率值：
+
+```python
+class Discriminator(nn.Module):
+    def __init__(self, img_dim):
+        super(Discriminator, self).__init__()
+        self.disc = nn.Sequential(
+            nn.Linear(img_dim, 128),        # 输入：图片 (784 维)
+            nn.LeakyReLU(0.01),             # LeakyReLU 激活
+            nn.Linear(128, 1),              # 输出：1 个值
+            nn.Sigmoid(),                   # 映射到 [0, 1]
+        )
+
+    def forward(self, x):
+        return self.disc(x)
+```
+
+判别器的结构：
+
+```
+输入：图片 (batch_size, 784)
+    ↓
+全连接层：784 → 128
+    ↓
+LeakyReLU(0.01)
+    ↓
+全连接层：128 → 1
+    ↓
+Sigmoid（输出 0~1 的概率值）
+    ↓
+输出：概率值，表示输入是真实图片的可能性
+```
+
+关键点说明：
+
+- **Sigmoid**：最后一层使用 Sigmoid，将输出映射到 [0, 1] 之间，便于解释为概率。
+- **LeakyReLU**：判别器也使用 LeakyReLU，保持梯度流动的稳定性。
+
+---
+
+## 4. 超参数与数据加载
+
+### 4.1 超参数设置
+
+```python
+import torch
+import torch.optim as optim
+import torchvision.datasets as datasets
+from torch.utils.data import DataLoader
+import torchvision.transforms as transforms
+
+# 设备
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# 超参数
+lr = 3e-4                    # 学习率
+z_dim = 64                   # 噪声向量的维度
+image_dim = 28 * 28 * 1      # MNIST 图片维度：784
+batch_size = 32              # 批次大小
+num_epochs = 50              # 训练轮数
+```
+
+### 4.2 数据预处理与加载
+
+MNIST 数据集包含 28×28 的灰度手写数字图片：
+
+```python
+# 数据预处理：转为张量并归一化到 [-1, 1]
+transforms = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,)),  # 将 [0,1] 映射到 [-1,1]
+])
+
+# 加载 MNIST 数据集
+dataset = datasets.MNIST(
+    root="dataset/",
+    transform=transforms,
+    download=True
+)
+
+loader = DataLoader(
+    dataset,
+    batch_size=batch_size,
+    shuffle=True
+)
+```
+
+注意：`transforms.Normalize((0.5,), (0.5,))` 将像素值从 [0, 1] 映射到 [-1, 1]，与生成器输出的 Tanh 范围匹配。
+
+---
+
+## 5. 完整训练流程
+
+### 5.1 初始化模型、优化器和损失函数
+
+```python
+# 初始化生成器和判别器
+disc = Discriminator(image_dim).to(device)
+gen = Generator(z_dim, image_dim).to(device)
+
+# 优化器
+opt_disc = optim.Adam(disc.parameters(), lr=lr)
+opt_gen = optim.Adam(gen.parameters(), lr=lr)
+
+# 损失函数：二元交叉熵
+criterion = nn.BCELoss()
+
+# 固定噪声，用于可视化训练过程中的生成效果
+fixed_noise = torch.randn((batch_size, z_dim)).to(device)
+```
+
+### 5.2 训练循环
+
+训练过程交替进行两个步骤：训练判别器和训练生成器。
+
+```python
+for epoch in range(num_epochs):
+    for batch_idx, (real, _) in enumerate(loader):
+        # 将图片展平为 784 维向量
+        real = real.view(-1, 784).to(device)
+        batch_size = real.shape[0]
+
+        ### 步骤 1：训练判别器 ###
+        # 判别器的目标：最大化 log(D(real)) + log(1 - D(G(z)))
+        noise = torch.randn(batch_size, z_dim).to(device)
+        fake = gen(noise)
+
+        # 判别器对真实图片的判断
+        disc_real = disc(real).view(-1)
+        lossD_real = criterion(disc_real, torch.ones_like(disc_real))
+
+        # 判别器对生成图片的判断
+        disc_fake = disc(fake).view(-1)
+        lossD_fake = criterion(disc_fake, torch.zeros_like(disc_fake))
+
+        # 判别器总损失
+        lossD = (lossD_real + lossD_fake) / 2
+
+        # 反向传播更新判别器
+        disc.zero_grad()
+        lossD.backward(retain_graph=True)
+        opt_disc.step()
+
+        ### 步骤 2：训练生成器 ###
+        # 生成器的目标：最大化 log(D(G(z)))
+        # 等价于最小化 BCE(D(G(z)), 1)
+        output = disc(fake).view(-1)
+        lossG = criterion(output, torch.ones_like(output))
+
+        # 反向传播更新生成器
+        gen.zero_grad()
+        lossG.backward()
+        opt_gen.step()
+
+        # 打印进度
+        if batch_idx == 0:
+            print(
+                f"Epoch [{epoch}/{num_epochs}] "
+                f"Loss D: {lossD.item():.4f}, "
+                f"Loss G: {lossG.item():.4f}"
+            )
+```
+
+### 5.3 训练流程详解
+
+**步骤 1：训练判别器（Discriminator）**
+
+判别器的目标是正确区分真实图片和生成图片：
+
+```
+lossD_real = BCE(D(real), 1)   # 真实图片 → 希望输出 1
+lossD_fake = BCE(D(fake), 0)   # 生成图片 → 希望输出 0
+lossD = (lossD_real + lossD_fake) / 2
+```
+
+**步骤 2：训练生成器（Generator）**
+
+生成器的目标是骗过判别器：
+
+```
+lossG = BCE(D(fake), 1)        # 希望判别器认为生成图片是真实的
+```
+
+注意：这里 `fake` 使用的是**同一个批次**的生成图片，因为 `retain_graph=True` 保留了计算图，使得生成器可以复用判别器的前向传播结果。
+
+---
+
+## 6. 完整代码
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torchvision.datasets as datasets
+from torch.utils.data import DataLoader
+import torchvision.transforms as transforms
+
+
+# 设备
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# 超参数
+lr = 3e-4
+z_dim = 64
+image_dim = 28 * 28 * 1
+batch_size = 32
+num_epochs = 50
+
+
+# 判别器
+class Discriminator(nn.Module):
+    def __init__(self, img_dim):
+        super(Discriminator, self).__init__()
+        self.disc = nn.Sequential(
+            nn.Linear(img_dim, 128),
+            nn.LeakyReLU(0.01),
+            nn.Linear(128, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        return self.disc(x)
+
+
+# 生成器
+class Generator(nn.Module):
+    def __init__(self, z_dim, img_dim):
+        super(Generator, self).__init__()
+        self.gen = nn.Sequential(
+            nn.Linear(z_dim, 256),
+            nn.LeakyReLU(0.01),
+            nn.Linear(256, img_dim),
+            nn.Tanh(),
+        )
+
+    def forward(self, x):
+        return self.gen(x)
+
+
+# 数据加载
+transforms = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,)),
+])
+
+dataset = datasets.MNIST(
+    root="dataset/",
+    transform=transforms,
+    download=True
+)
+loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+# 初始化模型
+disc = Discriminator(image_dim).to(device)
+gen = Generator(z_dim, image_dim).to(device)
+
+# 优化器
+opt_disc = optim.Adam(disc.parameters(), lr=lr)
+opt_gen = optim.Adam(gen.parameters(), lr=lr)
+
+# 损失函数
+criterion = nn.BCELoss()
+
+# 固定噪声用于可视化
+fixed_noise = torch.randn((batch_size, z_dim)).to(device)
+
+# 训练
+for epoch in range(num_epochs):
+    for batch_idx, (real, _) in enumerate(loader):
+        real = real.view(-1, 784).to(device)
+        batch_size = real.shape[0]
+
+        # 训练判别器
+        noise = torch.randn(batch_size, z_dim).to(device)
+        fake = gen(noise)
+
+        disc_real = disc(real).view(-1)
+        lossD_real = criterion(disc_real, torch.ones_like(disc_real))
+
+        disc_fake = disc(fake).view(-1)
+        lossD_fake = criterion(disc_fake, torch.zeros_like(disc_fake))
+
+        lossD = (lossD_real + lossD_fake) / 2
+
+        disc.zero_grad()
+        lossD.backward(retain_graph=True)
+        opt_disc.step()
+
+        # 训练生成器
+        output = disc(fake).view(-1)
+        lossG = criterion(output, torch.ones_like(output))
+
+        gen.zero_grad()
+        lossG.backward()
+        opt_gen.step()
+
+        if batch_idx == 0:
+            print(
+                f"Epoch [{epoch}/{num_epochs}] "
+                f"Loss D: {lossD.item():.4f}, "
+                f"Loss G: {lossG.item():.4f}"
+            )
+```
+
+---
+
+## 7. 生成图片的可视化
+
+训练完成后，可以使用生成器生成新的手写数字图片：
+
+```python
+import matplotlib.pyplot as plt
+
+# 生成图片
+with torch.no_grad():
+    fake = gen(fixed_noise).reshape(-1, 1, 28, 28)
+    fake = fake * 0.5 + 0.5  # 从 [-1, 1] 映射回 [0, 1]
+
+# 显示生成的图片
+fig, axes = plt.subplots(4, 8, figsize=(12, 6))
+for i, ax in enumerate(axes.flat):
+    ax.imshow(fake[i].squeeze(), cmap='gray')
+    ax.axis('off')
+plt.show()
+```
+
+---
+
+## 8. TensorBoard 可视化
+
+Aladdin Persson 的代码中使用了 TensorBoard 来可视化训练过程中的真实图片和生成图片：
+
+```python
+from torch.utils.tensorboard import SummaryWriter
+
+writer_fake = SummaryWriter("logs/fake")
+writer_real = SummaryWriter("logs/real")
+
+# 在训练循环中
+if batch_idx == 0:
+    with torch.no_grad():
+        # 显示真实图片
+        img_grid_real = torchvision.utils.make_grid(real[:32].reshape(-1, 1, 28, 28))
+        writer_real.add_image("Real", img_grid_real, global_step=step)
+
+        # 显示生成图片
+        img_grid_fake = torchvision.utils.make_grid(fake[:32].reshape(-1, 1, 28, 28))
+        writer_fake.add_image("Fake", img_grid_fake, global_step=step)
+
+    step += 1
+```
+
+使用以下命令启动 TensorBoard：
+
+```bash
+tensorboard --logdir logs
+```
+
+---
+
+## 9. 常见错误
+
+### 9.1 判别器与生成器的输入维度不匹配
+
+判别器接收展平后的图片（784 维），生成器输出也是 784 维：
+
+```python
+# 正确写法
+real = real.view(-1, 784)  # (batch_size, 784)
+fake = gen(noise)          # (batch_size, 784)
+
+# 错误写法：忘记展平
+real = real  # (batch_size, 1, 28, 28) - 判别器无法处理
+```
+
+### 9.2 生成器输出范围与真实图片范围不一致
+
+生成器使用 Tanh 输出 [-1, 1]，真实图片也必须归一化到 [-1, 1]：
+
+```python
+# 正确写法：归一化到 [-1, 1]
+transforms = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,)),
+])
+
+# 错误写法：只转为张量，范围是 [0, 1]
+transforms = transforms.Compose([
+    transforms.ToTensor(),
+])
+```
+
+### 9.3 损失函数中标签的正确使用
+
+判别器的目标是让真实图片输出 1，生成图片输出 0：
+
+```python
+# 正确写法
+lossD_real = criterion(disc_real, torch.ones_like(disc_real))
+lossD_fake = criterion(disc_fake, torch.zeros_like(disc_fake))
+
+# 错误写法：标签搞反了
+lossD_real = criterion(disc_real, torch.zeros_like(disc_real))
+lossD_fake = criterion(disc_fake, torch.ones_like(disc_fake))
+```
+
+### 9.4 忘记 retain_graph=True
+
+训练判别器后，计算图被释放，生成器无法复用 `fake` 的前向传播结果：
+
+```python
+# 正确写法
+lossD.backward(retain_graph=True)
+
+# 错误写法：计算图被释放，生成器的 lossG.backward() 会报错
+lossD.backward()
+```
+
+### 9.5 判别器太强或太弱
+
+- 判别器太强：生成器无法获得有效梯度，难以学习
+- 判别器太弱：无法给生成器提供有效的反馈
+
+解决方案：
+- 调整学习率（判别器学习率可以稍低）
+- 使用标签平滑（Label Smoothing）
+- 交替训练时，可以每训练 k 次判别器再训练 1 次生成器
+
+---
+
+## 10. 可能的改进方向
+
+- **DCGAN（Deep Convolutional GAN）**：使用卷积层替代全连接层，更适合图像生成任务。
+- **WGAN / WGAN-GP**：使用 Wasserstein 距离替代 JS 散度，训练更稳定。
+- **条件 GAN（Conditional GAN）**：在生成器和判别器中加入类别标签，可以控制生成特定数字。
+- **更大的数据集**：在 CIFAR-10 或 CelebA 等更复杂的数据集上训练。
+
+---
+
+## 11. 重点总结
+
+GAN 的核心思想：
+
+```
+生成器（Generator）：噪声 → 假图片，目标是骗过判别器
+判别器（Discriminator）：图片 → 真/假概率，目标是识破生成器
+两者通过对抗训练共同进步
+```
+
+损失函数：
+
+```
+判别器损失：BCE(D(real), 1) + BCE(D(fake), 0)
+生成器损失：BCE(D(fake), 1)
+```
+
+训练流程：
+
+```
+每个批次：
+  1. 训练判别器（冻结生成器）
+  2. 训练生成器（冻结判别器）
+```
+
+关键点：
+
+```
+生成器输出使用 Tanh，真实图片归一化到 [-1, 1]
+使用 LeakyReLU 避免神经元死亡
+训练判别器时使用 retain_graph=True
+使用 TensorBoard 监控训练过程
+```
+
+总结：
+
+```
+简单 GAN 使用全连接层在 MNIST 数据集上实现了最基本的生成对抗网络。
+虽然生成的图片质量有限，但它展示了 GAN 的核心思想：
+两个神经网络通过对抗训练，让生成器学会生成以假乱真的数据。
+这是理解更复杂 GAN 架构（如 DCGAN、WGAN）的基础。
+```
+
+
+# PyTorch GAN 变体系列
+
+本笔记涵盖 DCGAN、WGAN、Conditional GAN、CycleGAN、SRGAN、ESRGAN 六种重要的 GAN 变体，重点梳理各变体的核心思想和关键改进。
+
+---
+
+## 1. DCGAN（Deep Convolutional GAN）
+
+DCGAN 是将卷积神经网络引入 GAN 的开创性工作，由 Radford 等人于 2015 年提出。它用深度卷积架构替代了原始 GAN 中的多层感知机（MLP），极大提升了生成图像的质量。
+
+### 核心改进
+
+1. **取消池化层**：用带步长（stride）的卷积替代池化层，让网络自己学习下采样方式。
+2. **移除全连接层**：生成器和判别器均采用全卷积架构，提高了网络稳定性。
+3. **引入 Batch Normalization**：在生成器和判别器中均加入 BN 层，帮助梯度传递到每一层，防止生成器把所有样本收敛到同一个点。
+4. **激活函数选择**：生成器除输出层使用 Tanh 外，其余层使用 ReLU；判别器全部使用 LeakyReLU。
+5. **优化器**：使用 Adam 优化器。
+
+### 意义
+
+DCGAN 的判别器提取到的图像特征比其他无监督方法更有效，可用于图像分类任务。它证明了 GAN 可以学习到有意义的图像表征，为后续各种 GAN 变体奠定了基础。
+
+---
+
+## 2. WGAN（Wasserstein GAN）
+
+WGAN 由 Arjovsky 等人于 2017 年提出，核心贡献是从理论上分析了原始 GAN 训练不稳定的根本原因。
+
+### 核心思想
+
+原始 GAN 使用 JS 散度（Jensen-Shannon Divergence）衡量真实分布与生成分布之间的距离。当两个分布没有重叠时，JS 散度为常数，梯度消失，判别器无法提供有效的学习信号。
+
+WGAN 改用 **Wasserstein 距离**（又称 Earth Mover's Distance，推土机距离）作为损失函数。Wasserstein 距离即使在两个分布没有重叠时也能提供平滑的梯度。
+
+### 关键改进
+
+1. **去掉判别器最后一层的 Sigmoid**：WGAN 的判别器（称为 Critic）输出一个实数分数而非概率。
+2. **生成器和判别器的 loss 不取 log**。
+3. **权重裁剪（Weight Clipping）** ：限制 Critic 的权重绝对值在固定范围内，以强制满足 1-Lipschitz 约束。
+4. **优化器建议**：使用 RMSprop 或 SGD，不建议使用基于动量的优化器（如 Adam）。
+
+### WGAN-GP（带梯度惩罚的 WGAN）
+
+WGAN-GP 是对 WGAN 的进一步改进，用**梯度惩罚（Gradient Penalty）**替代权重裁剪来强制执行 1-Lipschitz 约束。梯度惩罚能更平滑地约束 Critic，通常训练效果更好。
+
+### 意义
+
+- 解决了 GAN 训练不稳定的问题，不再需要小心平衡生成器和判别器的训练程度。
+- 几乎解决了模式崩溃（Mode Collapse）问题。
+- 提供了有意义的损失值，可用于判断模型是否收敛。
+
+---
+
+## 3. Conditional GAN（条件 GAN）
+
+条件 GAN 由 Mirza 和 Osindero 于 2014 年提出，是原始 GAN 最早的重要改进之一。
+
+### 核心思想
+
+原始 GAN 的生成过程不可控：虽然能生成数据，但无法指定生成的具体内容。条件 GAN 通过在生成器和判别器的输入端同时添加**条件信息 y**（如类别标签、文本描述等）来解决这个问题。
+
+### 具体实现
+
+- **生成器**：输入为随机噪声 z + 条件 y
+- **判别器**：输入为图像 x + 条件 y
+
+损失函数变为：
+```
+min_G max_D V(D, G) = E[log D(x|y)] + E[log(1 - D(G(z|y)))]
+```
+
+### 应用
+
+条件 GAN 可以实现**指定类别生成**（如生成特定数字的手写体）、**Text-to-Image**（根据文字描述生成图像）等任务。
+
+---
+
+## 4. CycleGAN（循环一致性 GAN）
+
+CycleGAN 由 Zhu 等人于 2017 年提出，核心贡献是实现**无配对数据的图像到图像翻译**。
+
+### 问题背景
+
+传统的图像翻译任务（如 pix2pix）需要成对的训练数据（如同一场景的素描和照片），但很多场景下无法获得这样的配对数据。
+
+### 核心思想
+
+CycleGAN 同时训练两个生成器：
+- **G: X → Y**：将源域 X 的图像转换到目标域 Y
+- **F: Y → X**：将目标域 Y 的图像转换回源域 X
+
+### 循环一致性损失（Cycle Consistency Loss）
+
+为了防止生成器随意映射（由于没有配对数据，存在无数种可能的映射关系），CycleGAN 引入了循环一致性损失：
+
+- **前向循环一致性**：F(G(x)) ≈ x（从 X 到 Y 再回到 X，应该得到原图）
+- **后向循环一致性**：G(F(y)) ≈ y（从 Y 到 X 再回到 Y，应该得到原图）
+
+### 总损失
+
+```
+Total Loss = Adversarial Loss (G) + Adversarial Loss (F) + λ × Cycle Consistency Loss
+```
+
+其中 λ 控制循环一致性损失的权重。
+
+### 应用
+
+CycleGAN 可用于风格迁移、物体变形、季节转换、照片增强等无需配对数据的图像翻译任务。
+
+---
+
+## 5. SRGAN（Super-Resolution GAN）
+
+SRGAN 由 Ledig 等人于 2017 年提出，是首个将 GAN 应用于**图像超分辨率**（Single Image Super-Resolution, SISR）的工作。
+
+### 问题背景
+
+传统超分辨率方法以最小化 MSE（均方误差）为目标，虽然能获得较高的 PSNR（峰值信噪比），但生成的图像**高频细节不足、视觉感知不佳**。
+
+### 核心创新：感知损失（Perceptual Loss）
+
+SRGAN 提出**感知损失**替代传统的像素级 MSE 损失：
+
+```
+Perceptual Loss = Content Loss + Adversarial Loss
+```
+
+**Content Loss（内容损失）**
+
+使用预训练的 VGG19 网络提取图像的高层特征，计算生成图像与真实图像在**特征空间**的差异，而非像素空间的差异。这能更好地保留图像的感知相似性。
+
+**Adversarial Loss（对抗损失）**
+
+判别器网络判断图像是超分辨率生成的还是真实的高清图像。对抗损失推动生成图像向自然图像流形靠近。
+
+### 意义
+
+SRGAN 生成的超分辨率图像在视觉质量上显著优于传统方法。MOS（Mean Opinion Score）测试表明，SRGAN 的感知质量更接近原始高清图像。
+
+---
+
+## 6. ESRGAN（Enhanced SRGAN）
+
+ESRGAN 是 SRGAN 的增强版本，在 2018 年 PIRM 超分辨率挑战赛中获得了冠军。
+
+### 三大改进
+
+**1. 网络结构：RRDB（Residual-in-Residual Dense Block）**
+
+ESRGAN 使用 RRDB 作为基本构建块。RRDB 是残差块中嵌套密集连接块的结构，具有更强的表示能力，且**移除了 Batch Normalization 层**以提升性能。
+
+**2. 改进的判别器：RaGAN（Relativistic Average GAN）**
+
+传统判别器判断“一张图像是真是假”，而 RaGAN 判断“**一张图像比另一张更真实**”。这种相对性的判别方式能提供更强的学习信号。
+
+**3. 改进的感知损失**
+
+使用 VGG 网络**激活前的特征**来计算感知损失，而不是激活后的特征。这能为亮度一致性和纹理恢复提供更强的监督。
+
+### 意义
+
+ESRGAN 在图像超分辨率任务上达到了当时最优的感知质量，其 RRDB 架构和 RaGAN 判别器成为后续超分辨率模型的标准组件。
+
+---
+
+## 7. 各变体对比总结
+
+| 变体 | 核心思想 | 关键改进 | 主要应用 |
+|------|---------|---------|---------|
+| **DCGAN** | CNN + GAN | 卷积架构、BN、移除池化层 | 通用图像生成 |
+| **WGAN** | Wasserstein 距离 | 解决训练不稳定、模式崩溃 | 通用图像生成 |
+| **Conditional GAN** | 加入条件信息 | 可控生成 | 指定类别生成、Text-to-Image |
+| **CycleGAN** | 循环一致性 | 无配对数据图像翻译 | 风格迁移、季节转换 |
+| **SRGAN** | 感知损失 | 感知损失替代 MSE | 图像超分辨率 |
+| **ESRGAN** | SRGAN 增强 | RRDB、RaGAN、改进感知损失 | 图像超分辨率 |
+
+
+# PyTorch 从零实现字符级 LSTM 文本生成
+
+文本生成是自然语言处理中的经典任务。使用字符级 LSTM 模型，我们可以逐字符地学习文本的统计规律，并生成与训练文本风格相似的新内容。本笔记以莎士比亚文集为例，实现一个简单的字符级文本生成器。
+
+---
+
+## 1. 核心思想
+
+字符级 LSTM 文本生成的基本思路：
+
+```
+将文本拆解为字符序列 → 用 LSTM 学习字符之间的依赖关系 → 逐字符生成新文本
+```
+
+### 1.1 字符级 vs 词级
+
+- **词级**：以单词为基本单位，生成更流畅但需要处理 OOV（Out-of-Vocabulary）问题，词表较大。
+- **字符级**：以字符为基本单位，词表小（约几十到几百个字符），能生成任意单词组合，但需要更长的序列才能学到单词结构。
+
+字符级 LSTM 特别适合**诗歌、代码、对话**等风格性强的文本生成任务。
+
+### 1.2 训练目标
+
+给定一个字符序列（如 “hello”），模型预测下一个字符（如 “w”）。训练时，我们使用滑动窗口构造输入-目标对：
+
+```
+输入序列: "h e l l"
+目标字符: "o"
+
+输入序列: "e l l o"
+目标字符: " "
+```
+
+模型通过最小化交叉熵损失学习字符间的转移概率。
+
+---
+
+## 2. 数据预处理
+
+### 2.1 加载文本数据
+
+首先加载一个文本文件（如莎士比亚作品集），并将其转换为统一的格式。
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+
+# 读取文本文件
+file_path = "data/shakespeare.txt"
+with open(file_path, 'r', encoding='utf-8') as f:
+    text = f.read()
+
+print(f"文本长度: {len(text)} 个字符")
+print(f"前100个字符: {text[:100]}")
+```
+
+### 2.2 构建字符映射表（Character Vocabulary）
+
+我们需要将字符转换为数值索引，以便输入到神经网络中。
+
+```python
+# 获取所有不同的字符（去重）
+chars = sorted(set(text))
+vocab_size = len(chars)
+print(f"词汇表大小: {vocab_size}")
+
+# 创建字符到索引和索引到字符的映射
+char_to_idx = {ch: i for i, ch in enumerate(chars)}
+idx_to_char = {i: ch for i, ch in enumerate(chars)}
+
+# 编码函数：将字符串转换为整数列表
+def encode(text):
+    return [char_to_idx[ch] for ch in text]
+
+# 解码函数：将整数列表转换为字符串
+def decode(indices):
+    return ''.join([idx_to_char[idx] for idx in indices])
+```
+
+### 2.3 创建训练序列
+
+为了训练 LSTM，需要创建固定长度的输入序列和对应的目标序列（每个输入序列后移一个字符）。
+
+```python
+# 超参数
+seq_length = 100  # 每个输入序列的长度（字符数）
+batch_size = 64
+num_epochs = 50
+learning_rate = 0.001
+
+# 将整个文本编码为整数列表
+data = encode(text)
+data = torch.tensor(data, dtype=torch.long)
+
+# 创建训练样本：使用滑动窗口
+def create_sequences(data, seq_length):
+    xs = []
+    ys = []
+    for i in range(len(data) - seq_length - 1):
+        x = data[i:i+seq_length]      # 输入序列
+        y = data[i+1:i+seq_length+1]  # 目标序列（每个位置对应下一个字符）
+        xs.append(x)
+        ys.append(y)
+    return torch.stack(xs), torch.stack(ys)
+
+X, y = create_sequences(data, seq_length)
+print(f"输入张量形状: {X.shape}")  # (num_samples, seq_length)
+print(f"目标张量形状: {y.shape}")  # (num_samples, seq_length)
+```
+
+注意：目标序列是输入序列向后偏移一个字符，这意味着每个位置的预测目标是原始序列中该位置的下一个字符。
+
+---
+
+## 3. LSTM 模型定义
+
+我们定义一个简单的单层或双层 LSTM，包含一个嵌入层（可选）和全连接层。
+
+```python
+class CharLSTM(nn.Module):
+    def __init__(self, vocab_size, embed_size, hidden_size, num_layers=2):
+        super(CharLSTM, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_size)
+        self.lstm = nn.LSTM(embed_size, hidden_size, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, vocab_size)
+
+    def forward(self, x, hidden=None):
+        # x: (batch_size, seq_length)
+        x = self.embedding(x)  # (batch_size, seq_length, embed_size)
+        out, hidden = self.lstm(x, hidden)  # out: (batch_size, seq_length, hidden_size)
+        out = self.fc(out)  # (batch_size, seq_length, vocab_size)
+        return out, hidden
+
+    def init_hidden(self, batch_size):
+        # 初始化 LSTM 的隐藏状态和细胞状态
+        weight = next(self.parameters()).data
+        hidden = (weight.new(self.lstm.num_layers, batch_size, self.lstm.hidden_size).zero_(),
+                  weight.new(self.lstm.num_layers, batch_size, self.lstm.hidden_size).zero_())
+        return hidden
+```
+
+### 模型结构说明
+
+- **嵌入层（Embedding）** ：将字符索引映射为稠密向量。虽然字符级输入可以用 one-hot 编码，但嵌入层能学习更好的字符表示，且参数更少。
+- **LSTM 层**：处理序列数据，捕捉长期依赖。`batch_first=True` 使输入形状为 `(batch, seq, feature)`。
+- **全连接层（Linear）** ：将 LSTM 的输出映射到词汇表大小，用于预测每个位置的字符概率。
+
+---
+
+## 4. 训练循环
+
+### 4.1 使用 DataLoader 进行批量训练
+
+由于数据集可能很大，我们使用 `DataLoader` 分批加载。
+
+```python
+from torch.utils.data import TensorDataset, DataLoader
+
+dataset = TensorDataset(X, y)
+loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+model = CharLSTM(vocab_size, embed_size=128, hidden_size=256, num_layers=2)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+for epoch in range(num_epochs):
+    epoch_loss = 0
+    for batch_x, batch_y in loader:
+        batch_x, batch_y = batch_x.to(device), batch_y.to(device)
+        batch_size = batch_x.size(0)
+
+        # 初始化隐藏状态（每个批次独立）
+        hidden = model.init_hidden(batch_size)
+
+        # 前向传播
+        output, hidden = model(batch_x, hidden)
+        # output: (batch_size, seq_length, vocab_size)
+        # 将输出和目标重塑为 (batch_size * seq_length, vocab_size) 和 (batch_size * seq_length)
+        loss = criterion(output.view(-1, vocab_size), batch_y.view(-1))
+
+        # 反向传播
+        optimizer.zero_grad()
+        loss.backward()
+        # 梯度裁剪，防止梯度爆炸
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+
+        epoch_loss += loss.item()
+
+    print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss/len(loader):.4f}")
+```
+
+### 4.2 训练要点
+
+- **梯度裁剪**：LSTM 在长序列上容易梯度爆炸，使用 `clip_grad_norm_` 限制梯度范数。
+- **隐藏状态管理**：每个批次需要重置隐藏状态，因为批次之间没有时序连续性（数据被打乱）。
+- **损失计算**：将输出展平为二维，以便计算整个序列所有位置的交叉熵损失。
+
+---
+
+## 5. 文本生成（采样）
+
+训练完成后，我们可以使用模型生成新文本。生成过程是自回归的：每次预测一个字符，然后将该字符作为下一个时间步的输入。
+
+### 5.1 温度采样（Temperature Sampling）
+
+模型输出的是词汇表上的概率分布（经过 softmax）。温度采样通过调节温度参数控制生成的多样性：
+
+```
+p_i = exp(logits_i / temperature) / sum_j exp(logits_j / temperature)
+```
+
+- **temperature = 1**：标准 softmax，保持原始概率。
+- **temperature < 1**：概率分布更尖锐，倾向于选择概率最高的字符，生成更稳定但可能重复。
+- **temperature > 1**：概率分布更平滑，增加随机性，生成更多样但可能更混乱。
+
+### 5.2 生成函数实现
+
+```python
+def generate_text(model, start_string, length=200, temperature=0.8):
+    model.eval()
+    with torch.no_grad():
+        # 将起始字符串编码为张量
+        input_indices = [char_to_idx[ch] for ch in start_string if ch in char_to_idx]
+        if not input_indices:
+            input_indices = [char_to_idx[' ']]  # 默认用空格
+        input_tensor = torch.tensor(input_indices, dtype=torch.long).unsqueeze(0).to(device)  # (1, len)
+
+        # 初始化隐藏状态
+        hidden = model.init_hidden(1)
+
+        # 先通过起始字符串更新隐藏状态（可选，也可以从零开始）
+        # 这里我们将起始字符串作为初始输入，然后逐步生成
+        generated = list(input_indices)  # 已生成的字符索引列表
+
+        # 依次生成后续字符
+        for _ in range(length):
+            # 前向传播，取最后一个时间步的输出
+            output, hidden = model(input_tensor, hidden)
+            # output: (1, current_seq_len, vocab_size)
+            logits = output[:, -1, :] / temperature  # 取最后一个时间步，应用温度
+            # 转为概率分布
+            probs = torch.softmax(logits, dim=-1).squeeze(0)
+            # 采样一个字符
+            next_idx = torch.multinomial(probs, num_samples=1).item()
+            generated.append(next_idx)
+            # 将新字符作为下一步的输入（注意形状）
+            input_tensor = torch.tensor([[next_idx]], dtype=torch.long).to(device)
+
+        # 解码生成的字符序列
+        generated_text = decode(generated)
+        return generated_text
+```
+
+### 5.3 生成示例
+
+```python
+start_prompt = "To be, or not to be"
+generated = generate_text(model, start_prompt, length=500, temperature=0.7)
+print(generated)
+```
+
+---
+
+## 6. 训练过程中的监控
+
+可以使用 TensorBoard 监控损失变化，也可以定期生成文本评估模型进展。
+
+```python
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter("logs/char_lstm")
+
+# 在训练循环中
+writer.add_scalar("Loss/train", epoch_loss/len(loader), epoch)
+
+# 每 N 个 epoch 生成样本并记录
+if epoch % 5 == 0:
+    sample = generate_text(model, "The", length=100, temperature=0.8)
+    print(f"Epoch {epoch}: {sample[:100]}...")
+```
+
+---
+
+## 7. 常见错误
+
+### 7.1 输入形状不匹配
+
+LSTM 的输入应为 `(batch_size, seq_length, input_size)`，但我们直接传入索引序列。需要先经过嵌入层。
+
+确保 `batch_first=True` 与数据形状一致：
+
+```python
+# 正确
+lstm = nn.LSTM(embed_size, hidden_size, batch_first=True)
+out, _ = lstm(embedded)  # embedded: (batch, seq, embed)
+
+# 错误：batch_first 设置不一致
+lstm = nn.LSTM(embed_size, hidden_size, batch_first=False)  # 默认 False
+out, _ = lstm(embedded)  # 要求 (seq, batch, embed)
+```
+
+### 7.2 隐藏状态未正确初始化
+
+每个新批次必须重置隐藏状态，否则会错误地延续上一批次的时序信息：
+
+```python
+# 正确：每个批次重置
+hidden = model.init_hidden(batch_size)
+
+# 错误：复用上一个批次的 hidden（如果数据不是连续序列）
+# 在打乱数据的情况下会引入噪声
+```
+
+### 7.3 温度采样时使用未归一化的 logits
+
+`torch.multinomial` 需要输入概率，而不是 logits。必须先应用 softmax：
+
+```python
+# 正确
+probs = torch.softmax(logits / temperature, dim=-1)
+next_idx = torch.multinomial(probs, 1)
+
+# 错误：直接使用 logits
+next_idx = torch.multinomial(logits / temperature, 1)
+```
+
+### 7.4 生成时忘记将张量移动到设备
+
+确保所有张量位于同一设备（CPU/GPU）：
+
+```python
+# 正确
+input_tensor = input_tensor.to(device)
+
+# 错误：模型在 GPU，输入在 CPU，会报错
+```
+
+### 7.5 损失函数未忽略填充字符（可选）
+
+如果序列中包含填充字符，应使用 `ignore_index` 忽略它们，但本任务中所有序列长度一致，无填充。
+
+---
+
+## 8. 可能的改进方向
+
+- **堆叠更多 LSTM 层**：增加深度捕获更复杂的依赖关系。
+- **双向 LSTM**：但生成任务通常只用单向 LSTM（不能利用未来信息）。
+- **教师强制（Teacher Forcing）**：训练时使用真实目标作为输入，推理时用预测。
+- **注意力机制**：可以增强长期依赖的捕获能力。
+- **用 GRU 替代 LSTM**：参数更少，训练更快。
+- **字符级 CNN 或 Transformer**：捕获不同尺度的字符模式。
+
+---
+
+## 9. 重点总结
+
+任务本质：
+
+```
+字符级 LSTM 文本生成 = 学习字符序列的条件概率分布 P(字符_t | 字符_{t-1}, ..., 字符_{t-seq_length})
+```
+
+数据流程：
+
+```
+文本文件 → 字符映射表 → 整数编码 → 滑动窗口创建 (输入, 目标) 对 → DataLoader
+```
+
+模型结构：
+
+```
+嵌入层 (Embedding) → LSTM 层 → 全连接层 (输出词汇表大小)
+```
+
+训练要点：
+
+```
+使用交叉熵损失，每个批次重置隐藏状态，梯度裁剪
+```
+
+生成要点：
+
+```
+自回归生成，温度采样控制多样性
+```
+
+总结：
+
+```
+字符级 LSTM 文本生成是一个简单而强大的序列建模入门任务。通过这个模型，
+我们可以深入理解 RNN/LSTM 的工作原理、序列数据的处理方式以及如何从训练好的模型中采样生成新内容。
+该技术可用于诗歌生成、代码生成、对话系统等多种创意应用。
+```
+
+# PyTorch TorchText 
+
+TorchText 是 PyTorch 生态中专门用于自然语言处理（NLP）的文本处理库，旨在简化文本数据的加载、预处理和迭代流程。无论是做情感分析、机器翻译还是文本分类，TorchText 都能帮你高效地完成数据准备工作。
+TorchText 主要包含三大组件：
+
+- **Field 对象**：指定如何处理某个字段，如分词方法、是否转小写、起始/结束字符、补全字符及词典等。
+- **Dataset 类**：用于加载数据，继承自 PyTorch 的 Dataset，提供 `splits` 方法同时读取训练集、验证集、测试集。
+- **迭代器（Iterator）** ：包括标准 `Iterator`、`BucketIterator`（按长度分批，提高填充效率）和 `BPTTIterator`（用于语言模型）。
+
+> **⚠️ 版本说明**：TorchText 在 0.12.0 版本后引入了全新的数据处理管道，API 发生了较大变化。旧版（0.9.x 及以前）使用 `torchtext.legacy` 模块，新版（0.12.0+）采用更简洁的 API。本文主要基于新版 TorchText 进行讲解，同时会标注新旧版本的区别。
+
+
+## 1. 自定义数据集：加载 CSV / JSON / TSV 文件
+
+### 1.1 TorchText 支持的数据格式
+
+TorchText 原生支持三种数据格式：
+
+- **CSV**（逗号分隔值）
+- **TSV**（制表符分隔值）
+- **JSON**（JSON Lines 格式）
+
+其中，JSON 格式被官方推荐为最佳选择。
+
+### 1.2 Field 对象：定义数据处理方式
+
+在加载数据之前，首先需要定义 `Field` 对象，它决定了每个字段如何处理。
+
+```python
+from torchtext.legacy import data  # 旧版 API
+
+# 定义文本字段
+TEXT = data.Field(
+    sequential=True,      # 是否为序列数据
+    tokenize='spacy',     # 分词器
+    lower=True,           # 转小写
+    include_lengths=True, # 是否返回序列长度
+    batch_first=True,     # batch 作为第一维度
+)
+
+# 定义标签字段
+LABEL = data.LabelField(
+    dtype=torch.float,    # 标签的数据类型
+    sequential=False,     # 标签不是序列
+)
+```
+
+**Field 的常用参数**：
+
+| 参数 | 说明 |
+|------|------|
+| `sequential` | 是否为序列数据，默认 True |
+| `use_vocab` | 是否使用词典，默认 True |
+| `init_token` | 文本起始字符，如 `<sos>` |
+| `eos_token` | 文本结束字符，如 `<eos>` |
+| `fix_length` | 固定序列长度，不够则用 `pad_token` 补齐 |
+| `lower` | 是否转小写 |
+| `tokenize` | 分词函数，默认 `str.split` |
+| `batch_first` | batch 是否作为第一维度 |
+| `pad_token` | 补全字符，默认为 `<pad>` |
+| `unk_token` | 替换未知词的字符，默认为 `<unk>` |
+
+### 1.3 加载 JSON 数据
+
+JSON 数据必须采用 **JSON Lines 格式**，即每行一个独立的 JSON 对象：
+
+```json
+{"name": "John", "location": "United Kingdom", "quote": ["i", "love", "the", "united kingdom"]}
+{"name": "Mary", "location": "United States", "quote": ["i", "want", "more", "telescopes"]}
+```
+
+**定义字段并加载数据**：
+
+```python
+from torchtext.legacy import data
+
+# 1. 定义 Field
+NAME = data.Field()
+SAYING = data.Field()
+PLACE = data.Field()
+
+# 2. 创建字段映射字典
+# 键 → JSON 对象的键
+# 值 → (batch 中的属性名, Field 对象)
+fields = {
+    'name': ('n', NAME),      # batch.n 可访问 name
+    'location': ('p', PLACE), # batch.p 可访问 location
+    'quote': ('s', SAYING),   # batch.s 可访问 quote
+}
+
+# 3. 使用 TabularDataset.splits 加载数据
+train_data, test_data = data.TabularDataset.splits(
+    path='data',              # 数据文件所在目录
+    train='train.json',       # 训练集文件名
+    test='test.json',         # 测试集文件名
+    format='json',            # 数据格式
+    fields=fields,            # 字段映射
+)
+```
+
+**JSON 加载的注意事项**：
+
+- `fields` 字典中键的顺序不重要，只要与 JSON 键匹配即可。
+- 字段名不必与 JSON 键相同（如用 `PLACE` 表示 `location`）。
+- 不需要使用的 JSON 字段可以忽略（如示例中的 `age`）。
+- 如果 JSON 字段值是**字符串**，会应用分词；如果是**列表**，则不进行分词。建议预先将文本分词为列表，可节省处理时间。
+
+### 1.4 加载 CSV / TSV 数据
+
+CSV 和 TSV 的加载方式类似，只需改变 `format` 参数。
+
+**CSV 数据格式示例**：
+
+```csv
+text,label
+"I love this movie!",pos
+"Terrible film.",neg
+```
+
+**加载 CSV 数据**：
+
+```python
+from torchtext.legacy import data
+
+# 1. 定义 Field
+TEXT = data.Field(tokenize='spacy', lower=True)
+LABEL = data.LabelField(dtype=torch.float)
+
+# 2. 定义字段列表（顺序必须与 CSV 列顺序一致）
+fields = [
+    ('text', TEXT),
+    ('label', LABEL),
+]
+
+# 3. 加载数据
+train_data, test_data = data.TabularDataset.splits(
+    path='data',
+    train='train.csv',
+    test='test.csv',
+    format='csv',
+    fields=fields,
+    skip_header=True,  # 跳过 CSV 表头
+)
+```
+
+**加载 TSV 数据**（只需将 `format` 改为 `'tsv'`）：
+
+```python
+train_data, test_data = data.TabularDataset.splits(
+    path='data',
+    train='train.tsv',
+    test='test.tsv',
+    format='tsv',        # 改为 tsv
+    fields=fields,
+    skip_header=True,
+)
+```
+
+### 1.5 数据集划分
+
+如果只有一个数据集文件，可以使用 `split()` 方法进行划分：
+
+```python
+# 按比例划分为 70% 训练、15% 验证、15% 测试
+train_data, valid_data, test_data = dataset.split(
+    split_ratio=[0.7, 0.15, 0.15]
+)
+```
+
+### 1.6 构建词汇表（Vocabulary）
+
+词汇表将单词映射为数字索引，是 NLP 模型训练的关键步骤。
+
+```python
+# 基于训练集构建词汇表
+TEXT.build_vocab(
+    train_data,
+    max_size=10000,              # 词汇表最大大小
+    vectors='glove.6B.100d',     # 使用预训练词向量
+    min_freq=5,                  # 只保留出现次数 >= 5 的词
+)
+
+LABEL.build_vocab(train_data)
+
+# 查看词汇表大小
+print(f"词汇表大小: {len(TEXT.vocab)}")
+print(f"标签类别: {LABEL.vocab.itos}")
+```
+
+### 1.7 创建迭代器（Iterator）
+
+迭代器负责将数据分批提供给模型。
+
+```python
+from torchtext.legacy import data
+
+# BucketIterator：按序列长度分批，提高填充效率
+train_iter, valid_iter = data.BucketIterator.splits(
+    (train_data, valid_data),
+    batch_size=64,
+    sort_key=lambda x: len(x.text),  # 按文本长度排序
+    shuffle=True,                    # 训练集打乱
+    device=device,                   # CPU 或 GPU
+)
+
+# 标准 Iterator（不按长度分批）
+train_iter = data.Iterator(
+    train_data,
+    batch_size=64,
+    shuffle=True,
+    device=device,
+)
+```
+
+**三种迭代器的区别**：
+
+| 迭代器 | 说明 |
+|--------|------|
+| `Iterator` | 标准迭代器，简单分批 |
+| `BucketIterator` | 按序列长度分批，减少填充量，提高效率 |
+| `BPTTIterator` | 基于时间的反向传播，用于语言模型 |
+
+
+## 2. 内置数据集
+
+TorchText 提供了多种常用的内置 NLP 数据集，可以直接加载使用。
+
+### 2.1 可用内置数据集列表
+
+**语言模型数据集**：
+
+- `WikiText2`
+- `WikiText103`
+- `PennTreebank`
+- `EnWik9`
+
+**文本分类数据集**：
+
+- `AG_NEWS`：新闻分类
+- `SogouNews`：搜狗新闻
+- `DBpedia`：维基百科分类
+- `IMDB`：电影评论情感分析
+- `SST2`：斯坦福情感树库
+
+### 2.2 使用内置数据集（新版 API）
+
+新版 TorchText（0.12.0+）的数据集 API 更加简洁，返回的是迭代器：
+
+```python
+import torch
+from torchtext.datasets import IMDB
+
+# 加载 IMDB 数据集
+train_iter = IMDB(split='train')
+test_iter = IMDB(split='test')
+
+# 查看第一个样本
+first_example = next(iter(train_iter))
+print(f"Label: {first_example[0]}")   # 'pos' 或 'neg'
+print(f"Text: {first_example[1][:200]}...")  # 评论内容前 200 字符
+```
+
+**加载 AG_NEWS 数据集**：
+
+```python
+from torchtext.datasets import AG_NEWS
+
+train_iter, test_iter = AG_NEWS()
+# AG_NEWS 的每个样本是 (label, text) 元组
+```
+
+### 2.3 使用内置数据集（旧版 API）
+
+旧版 TorchText（0.9.x 及以前）使用 `splits` 方法：
+
+```python
+from torchtext.legacy import data
+from torchtext.legacy import datasets
+
+# 定义 Field
+TEXT = data.Field(lower=True, include_lengths=True, batch_first=True)
+LABEL = data.LabelField(sequential=False)
+
+# 加载 IMDB 数据集
+train, test = datasets.IMDB.splits(TEXT, LABEL)
+
+# 划分验证集
+train, valid = train.split(split_ratio=0.8)
+
+# 构建词汇表
+TEXT.build_vocab(train, vectors='glove.6B.300d')
+LABEL.build_vocab(train)
+
+# 创建迭代器
+train_iter, valid_iter, test_iter = data.BucketIterator.splits(
+    (train, valid, test),
+    batch_size=64,
+    device=device,
+)
+```
+
+### 2.4 构建词汇表（新版 API）
+
+新版 API 使用 `get_tokenizer` 和 `build_vocab_from_iterator` 构建词汇表：
+
+```python
+from torchtext.data.utils import get_tokenizer
+from torchtext.vocab import build_vocab_from_iterator
+
+# 1. 定义分词器
+tokenizer = get_tokenizer('basic_english')
+
+# 2. 定义生成 token 的迭代器函数
+def yield_tokens(data_iter):
+    for _, text in data_iter:
+        yield tokenizer(text)
+
+# 3. 构建词汇表
+train_iter = IMDB(split='train')
+vocab = build_vocab_from_iterator(
+    yield_tokens(train_iter),
+    specials=["<unk>"],   # 特殊标记
+    min_freq=10,          # 最低词频
+)
+
+# 设置未知词的默认索引
+vocab.set_default_index(vocab["<unk>"])
+
+print(f"词汇表大小: {len(vocab)}")
+print(f"'movie' 的索引: {vocab['movie']}")
+```
+
+
+## 3. 从文本文件创建 Dataset
+
+有时数据存储在纯文本文件中（如 `.txt` 文件），每个文件代表一个样本，或者整个语料库在一个大文件中。本节介绍如何处理这类数据。
+
+### 3.1 使用 LanguageModelingDataset（语言模型）
+
+对于语言模型任务（如文本生成），数据通常是一个或多个大文本文件。TorchText 提供了 `LanguageModelingDataset` 来处理这类数据。
+
+```python
+from torchtext.legacy import data
+from torchtext.legacy import datasets
+
+# 定义 Field
+TEXT = data.Field(
+    tokenize='spacy',
+    lower=True,
+    init_token='<sos>',
+    eos_token='<eos>',
+)
+
+# 加载语言模型数据集
+train, val, test = datasets.LanguageModelingDataset.splits(
+    path='data/wikitext-2',
+    train='wiki.train.tokens',
+    validation='wiki.valid.tokens',
+    test='wiki.test.tokens',
+    text_field=TEXT,
+)
+
+# 构建词汇表
+TEXT.build_vocab(train, max_size=50000)
+
+# 创建 BPTT 迭代器（用于语言模型）
+from torchtext.legacy.data import BPTTIterator
+
+train_iter = BPTTIterator(
+    train,
+    batch_size=20,
+    bptt_len=35,          # 反向传播的时间步长
+    device=device,
+)
+```
+
+### 3.2 使用 TabularDataset 加载 TSV 文本文件
+
+对于分类任务，可以将文本和标签组织成 TSV 格式：
+
+```python
+from torchtext.legacy import data
+
+# 定义 Field
+TEXT = data.Field(tokenize='spacy', lower=True)
+LABEL = data.LabelField(sequential=False)
+
+# 字段列表
+fields = [('Text', TEXT), ('Label', LABEL)]
+
+# 加载 TSV 数据
+train_data, test_data = data.TabularDataset.splits(
+    path='data',
+    train='train.tsv',
+    test='test.tsv',
+    format='tsv',
+    fields=fields,
+)
+```
+
+### 3.3 从原始文本文件构建 Dataset
+
+如果数据是纯文本文件（每个文件一个样本），可以手动创建 `Dataset` 对象：
+
+```python
+from torchtext.legacy import data
+import os
+
+# 定义 Field
+TEXT = data.Field(tokenize='spacy', lower=True)
+LABEL = data.LabelField(sequential=False)
+
+# 读取文本文件并创建 Example
+def read_files(directory, label):
+    examples = []
+    for filename in os.listdir(directory):
+        with open(os.path.join(directory, filename), 'r', encoding='utf-8') as f:
+            text = f.read()
+            examples.append(data.Example.fromlist([text, label], fields))
+    return examples
+
+# 创建训练集和测试集
+train_examples = read_files('data/train/pos', 'pos') + read_files('data/train/neg', 'neg')
+test_examples = read_files('data/test/pos', 'pos') + read_files('data/test/neg', 'neg')
+
+# 构建 Dataset
+train_data = data.Dataset(train_examples, fields)
+test_data = data.Dataset(test_examples, fields)
+```
+
+### 3.4 从 Pandas DataFrame 创建 Dataset
+
+如果数据已经在 Pandas DataFrame 中，可以直接创建 Dataset：
+
+```python
+import pandas as pd
+from torchtext.legacy import data
+
+# 读取 CSV 到 DataFrame
+train_df = pd.read_csv('./train.csv')
+test_df = pd.read_csv('./test.csv')
+
+# 定义 Field
+TEXT = data.Field(tokenize='spacy', lower=True)
+LABEL = data.LabelField(sequential=False)
+
+fields = [('text', TEXT), ('label', LABEL)]
+
+# 从 DataFrame 创建 Example
+train_examples = [
+    data.Example.fromlist([row['text'], row['label']], fields)
+    for _, row in train_df.iterrows()
+]
+
+train_data = data.Dataset(train_examples, fields)
+```
+
+
+## 4. 新旧版本 API 对比
+
+| 功能 | 旧版 (0.9.x) | 新版 (0.12.0+) |
+|------|-------------|----------------|
+| 导入方式 | `from torchtext.legacy import data` | `from torchtext.data.utils import ...` |
+| 数据集加载 | `datasets.IMDB.splits(TEXT, LABEL)` | `IMDB(split='train')` |
+| 词汇表构建 | `TEXT.build_vocab(train_data)` | `build_vocab_from_iterator()` |
+| 分词器 | `Field(tokenize='spacy')` | `get_tokenizer('spacy')` |
+
+> **建议**：新项目优先使用新版 API（0.12.0+），更简洁高效。旧版项目如需维护，可使用 `torchtext.legacy` 保持兼容。
+
+
+## 5. 完整示例：从零开始构建文本分类管道
+
+以下是一个完整的情感分析示例，整合了本节所有知识点：
+
+```python
+import torch
+from torchtext.legacy import data
+from torchtext.legacy import datasets
+
+# 1. 设备配置
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# 2. 定义 Field
+TEXT = data.Field(
+    tokenize='spacy',
+    lower=True,
+    include_lengths=True,
+    batch_first=True,
+)
+
+LABEL = data.LabelField(
+    dtype=torch.float,
+    sequential=False,
+)
+
+# 3. 加载内置 IMDB 数据集
+train_data, test_data = datasets.IMDB.splits(TEXT, LABEL)
+
+# 4. 划分验证集
+train_data, valid_data = train_data.split(split_ratio=0.8)
+
+# 5. 构建词汇表
+TEXT.build_vocab(train_data, max_size=25000, vectors='glove.6B.100d')
+LABEL.build_vocab(train_data)
+
+# 6. 创建迭代器
+train_iter, valid_iter, test_iter = data.BucketIterator.splits(
+    (train_data, valid_data, test_data),
+    batch_size=64,
+    sort_key=lambda x: len(x.text),
+    shuffle=True,
+    device=device,
+)
+
+# 7. 查看数据样本
+batch = next(iter(train_iter))
+print(f"文本批次形状: {batch.text[0].shape}")  # (batch, seq_len)
+print(f"标签: {batch.label}")
+
+# 8. 定义简单的 LSTM 模型（示例）
+class SimpleLSTM(torch.nn.Module):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, output_dim):
+        super().__init__()
+        self.embedding = torch.nn.Embedding(vocab_size, embedding_dim)
+        self.lstm = torch.nn.LSTM(embedding_dim, hidden_dim, batch_first=True)
+        self.fc = torch.nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, text, text_lengths):
+        embedded = self.embedding(text)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(
+            embedded, text_lengths.cpu(), batch_first=True, enforce_sorted=False
+        )
+        _, (hidden, _) = self.lstm(packed)
+        return self.fc(hidden[-1])
+
+# 9. 训练（略）
+```
+
+## 6. 重点总结
+
+**TorchText 的核心组件**：
+
+```
+Field（定义字段处理方式） → Dataset（加载数据） → Iterator（分批迭代）
+```
+
+**自定义数据集加载流程**：
+
+```
+准备数据（CSV/TSV/JSON）→ 定义 Field → 使用 TabularDataset.splits 加载 → 构建词汇表 → 创建迭代器
+```
+
+**JSON 格式的优点**：
+
+```
+支持嵌套结构、字段顺序无关、可忽略不需要的字段、预分词后可节省处理时间
+```
+
+**内置数据集**：
+
+```
+直接导入使用，无需下载和预处理，支持 IMDB、AG_NEWS、WikiText2 等常用数据集
+```
+
+**新旧版本差异**：
+
+```
+旧版（0.9.x）：torchtext.legacy，使用 Field + 数据集 .splits 方法
+新版（0.12.0+）：更简洁的 API，使用 get_tokenizer + build_vocab_from_iterator
+```
+
+总结：
+
+```
+TorchText 是 PyTorch NLP 任务中不可或缺的数据处理工具。掌握 Field 的定义、
+TabularDataset 的加载方式、词汇表的构建以及迭代器的使用，
+可以帮助你高效地处理各种文本数据格式，将更多精力放在模型设计上。
+```
+
+
+# PyTorch Einsum 指南
+
+Einsum（爱因斯坦求和约定）是一种强大的张量运算表示法，最初源于物理学中的张量计算，如今在 NumPy、PyTorch、TensorFlow 等主流深度学习框架中均有实现。它用一个简洁的字符串就能表达复杂的张量操作（如点积、外积、转置、矩阵-向量乘法、矩阵-矩阵乘法、迹、张量收缩等），无需记忆各种函数名，让代码更简洁、可读性更强。
+
+---
+
+## 1. 核心概念：爱因斯坦求和约定
+
+爱因斯坦求和约定的核心规则是：**在同一个表达式中，如果某个索引出现两次，则对该索引进行求和（收缩）**。
+
+例如，矩阵乘法 `C[i, j] = sum_k A[i, k] * B[k, j]` 在爱因斯坦记法中写作：
+
+```
+C[i, j] = A[i, k] B[k, j]
+```
+
+索引 `k` 出现两次（在 A 的第二个维度和 B 的第一个维度），所以自动对 `k` 求和。结果 `C` 的维度由剩余的索引 `i` 和 `j` 决定。
+
+Einsum 函数允许我们用**字符串**描述这个求和过程，而无需显式写出循环或 `matmul`、`sum` 等函数。
+
+---
+
+## 2. Einsum 基本语法
+
+在 PyTorch 中，调用方式为：
+
+```python
+torch.einsum(equation, *operands)
+```
+
+其中 `equation` 是字符串，描述张量的维度关系。它的格式为：
+
+```
+"输入1的维度标记, 输入2的维度标记, ... -> 输出维度标记"
+```
+
+- 用逗号分隔各个输入的维度标记
+- 用 `->` 分隔输入和输出
+- 忽略不存在的维度（即需要求和的维度）
+
+**维度标记规则**：通常使用小写字母表示维度，如 `i, j, k, l` 等。相同字母在不同张量中表示相同的维度，出现两次的字母会自动求和。
+
+例如，矩阵乘法 `A (shape m×n)` 和 `B (n×p)` 相乘得到 `C (m×p)`：
+
+```python
+C = torch.einsum('ik,kj->ij', A, B)
+# 等价于 C = torch.matmul(A, B)
+```
+
+---
+
+## 3. 常见张量运算的 Einsum 实现
+
+### 3.1 转置（Transpose）
+
+```python
+import torch
+
+A = torch.randn(3, 4)
+
+# 转置
+B = torch.einsum('ij->ji', A)
+# 等价于 A.T
+```
+
+### 3.2 求和（Sum）
+
+```python
+# 对所有元素求和
+total = torch.einsum('ij->', A)  # 等价于 A.sum()
+
+# 对列求和（按行维度保留）
+col_sum = torch.einsum('ij->j', A)  # 等价于 A.sum(dim=0)
+
+# 对行求和（按列维度保留）
+row_sum = torch.einsum('ij->i', A)  # 等价于 A.sum(dim=1)
+```
+
+### 3.3 内积 / 点积（Dot Product）
+
+```python
+a = torch.randn(3)
+b = torch.randn(3)
+
+# 向量内积
+dot = torch.einsum('i,i->', a, b)  # 等价于 torch.dot(a, b)
+# 或 torch.sum(a * b)
+```
+
+### 3.4 矩阵-向量乘法（Matrix-Vector Multiplication）
+
+```python
+M = torch.randn(3, 4)
+v = torch.randn(4)
+
+# M @ v
+y = torch.einsum('ij,j->i', M, v)  # 等价于 torch.mv(M, v)
+```
+
+### 3.5 矩阵乘法（Matrix-Matrix Multiplication）
+
+```python
+A = torch.randn(3, 4)
+B = torch.randn(4, 5)
+
+# A @ B
+C = torch.einsum('ik,kj->ij', A, B)  # 等价于 torch.mm(A, B)
+```
+
+### 3.6 批量矩阵乘法（Batched Matrix Multiplication）
+
+```python
+A = torch.randn(10, 3, 4)  # 批量大小 10，每个矩阵 3x4
+B = torch.randn(10, 4, 5)  # 批量大小 10，每个矩阵 4x5
+
+# 批量矩阵乘法：每个批次独立相乘
+C = torch.einsum('bij,bjk->bik', A, B)  # 等价于 torch.bmm(A, B)
+```
+
+### 3.7 外积（Outer Product）
+
+```python
+a = torch.randn(3)
+b = torch.randn(4)
+
+# 外积
+O = torch.einsum('i,j->ij', a, b)  # 等价于 torch.outer(a, b)
+```
+
+### 3.8 Hadamard 乘积（逐元素乘积）
+
+```python
+A = torch.randn(3, 4)
+B = torch.randn(3, 4)
+
+# 逐元素乘积
+H = torch.einsum('ij,ij->ij', A, B)  # 等价于 A * B
+```
+
+### 3.9 迹（Trace）
+
+```python
+M = torch.randn(4, 4)
+
+# 迹：对角元素之和
+trace = torch.einsum('ii->', M)  # 等价于 torch.trace(M)
+```
+
+### 3.10 对角元素提取
+
+```python
+M = torch.randn(4, 4)
+
+# 提取对角元素
+diag = torch.einsum('ii->i', M)  # 等价于 torch.diag(M)
+```
+
+### 3.11 张量收缩（Tensor Contraction）
+
+例如，两个 3D 张量在中间两个维度上收缩：
+
+```python
+A = torch.randn(2, 3, 5)
+B = torch.randn(2, 5, 4)
+
+# 收缩最后一个维度和第一个维度
+C = torch.einsum('ijk,ikl->ijl', A, B)  # 结果形状为 (2, 3, 4)
+# 等价于 torch.einsum('ijk,ikm->ijm', A, B)（如果维度标记不同）
+```
+
+更复杂的例子：
+
+```python
+A = torch.randn(3, 4, 5)
+B = torch.randn(5, 6)
+
+# A 的最后一维和 B 的第一维收缩，保留 A 的前两维和 B 的第二维
+C = torch.einsum('ijk,kl->ijl', A, B)  # 结果形状 (3, 4, 6)
+```
+
+### 3.12 元素相乘并求和（Reduction）
+
+```python
+A = torch.randn(3, 4, 5)
+B = torch.randn(3, 4, 5)
+
+# 沿最后一维相乘并求和（保留前两维）
+S = torch.einsum('ijk,ijk->ij', A, B)  # 等价于 (A * B).sum(dim=2)
+```
+
+### 3.13 复杂操作：如注意力机制中的 Q、K、V 计算
+
+对于自注意力，假设 `Q`、`K`、`V` 形状均为 `(batch, seq_len, dim)`，计算注意力分数：
+
+```python
+Q = torch.randn(2, 4, 8)  # batch=2, seq=4, dim=8
+K = torch.randn(2, 4, 8)
+V = torch.randn(2, 4, 8)
+
+# 计算注意力分数 (batch, seq_q, seq_k)
+scores = torch.einsum('bik,bjk->bij', Q, K)  # 等价于 torch.bmm(Q, K.transpose(1,2))
+# 然后 softmax 后与 V 相乘
+attn = torch.einsum('bij,bjk->bik', softmax_scores, V)
+```
+
+---
+
+## 4. Einsum 与常规函数的性能比较
+
+在大多数情况下，Einsum 的性能与专用的函数（如 `matmul`、`sum`）相当，因为底层会调用优化的 BLAS 库。但在某些情况下，Einsum 可能稍慢，因为它需要解析字符串并生成执行计划，但对于大多数中型到大型张量，差异可以忽略。
+
+**优势**：
+- 代码简洁，无需记忆多种函数名。
+- 易于表达复杂的张量操作，尤其是涉及多维收缩的情况。
+- 可读性好（对于熟悉 Einstein 记法的人来说）。
+
+**劣势**：
+- 对初学者可能不易理解。
+- 对于简单的操作（如转置、求和），专用函数更直观。
+- 在某些极端情况下，可能不如手写优化的循环或专用函数快（但很少见）。
+
+---
+
+## 5. 高级用法：Einsum 的可选参数
+
+Einsum 还支持一些可选参数，例如控制求和方式或优化策略。
+
+### 5.1 PyTorch 中的 `torch.einsum`
+
+```python
+# 基本用法
+result = torch.einsum('ij,jk->ik', A, B)
+
+# 使用 optimize 参数（自动选择最优路径）
+result = torch.einsum('ij,jk->ik', A, B, optimize=True)
+```
+
+### 5.2 NumPy 中的 `np.einsum`
+
+NumPy 提供了 `optimize` 参数，可以显著加速张量收缩。
+
+```python
+import numpy as np
+
+A = np.random.randn(3, 4)
+B = np.random.randn(4, 5)
+
+# 自动优化
+C = np.einsum('ij,jk->ik', A, B, optimize=True)
+```
+
+### 5.3 TensorFlow 中的 `tf.einsum`
+
+TensorFlow 的用法类似：
+
+```python
+import tensorflow as tf
+
+A = tf.random.normal([3, 4])
+B = tf.random.normal([4, 5])
+C = tf.einsum('ij,jk->ik', A, B)
+```
+
+---
+
+## 6. 常见错误与注意事项
+
+### 6.1 维度标签混淆
+
+确保相同字母表示相同的维度大小。例如，`'ij,ik->ik'` 要求 A 和 B 的第一维大小相同（`i`），而第二维可以不同。
+
+### 6.2 输出维度标签的顺序决定输出形状
+
+输出的标签顺序决定了张量的形状。例如，`'ij,kl->ikjl'` 会输出形状为 `(i, k, j, l)`。
+
+### 6.3 未出现在输出中的标签自动求和
+
+如果在输入中出现了但在输出中被省略的标签，Einsum 会自动对这些维度求和。
+
+```python
+A = torch.randn(3, 4)
+B = torch.randn(4, 5)
+
+# 输出为 'ij'，省略 'k'，所以自动对 k 求和
+C = torch.einsum('ik,kj->ij', A, B)  # 正常矩阵乘法
+```
+
+### 6.4 不支持修改输入张量
+
+Einsum 总是返回新的张量，不会修改原始数据。
+
+### 6.5 对于标量结果，输出为空
+
+```python
+dot = torch.einsum('i,i->', a, b)  # 输出是标量，'->' 后为空
+```
+
+### 6.6 性能提示
+
+对于复杂的收缩，使用 `optimize=True` 可以在 NumPy 和 PyTorch 中显著提升性能，因为它会寻找最优的收缩顺序。
+
+---
+
+## 7. 实际应用示例
+
+### 7.1 双线性层（Bilinear Layer）
+
+```python
+# 输入 x: (batch, in_features)
+# 权重 W: (in_features, out_features)
+# 偏置 b: (out_features)
+y = torch.einsum('bi,io->bo', x, W) + b  # 等价于 x @ W + b
+```
+
+### 7.2 注意力机制中的缩放点积
+
+```python
+# Q, K, V: (batch, heads, seq_len, dim)
+scores = torch.einsum('bhld,bhmd->bhlm', Q, K) / (dim ** 0.5)
+attn_weights = torch.softmax(scores, dim=-1)
+output = torch.einsum('bhlm,bhmd->bhld', attn_weights, V)
+```
+
+### 7.3 计算协方差矩阵
+
+```python
+# 数据矩阵 X: (batch, features)
+X_centered = X - X.mean(dim=0, keepdim=True)
+cov = torch.einsum('bi,bj->ij', X_centered, X_centered) / (X.size(0) - 1)
+```
+
+### 7.4 图像卷积的简化表示
+
+虽然实际卷积通常用专用函数，但 Einsum 可以表达一些卷积的变体：
+
+```python
+# 假设输入 I: (batch, in_ch, h, w)
+# 卷积核 K: (out_ch, in_ch, k, k)
+# 输出 O: (batch, out_ch, h_out, w_out)
+# 这里只是为了演示，实际应使用 conv2d
+```
+
+---
+
+## 8. 与广播（Broadcasting）的关系
+
+Einsum 自动处理广播，但要求维度标签一致。例如：
+
+```python
+A = torch.randn(3, 1, 5)  # 第2维为1，可广播
+B = torch.randn(4, 5)
+# 想得到 (3, 4, 5) 的逐元素乘积
+# 可以使用 'ijk,ik->ijk'，但需要确保 A 和 B 的对应维度匹配或可广播
+# 注意：einsum 不会自动广播，所以必须显式匹配维度
+```
+
+通常，如果涉及广播，使用常规的广播乘法 `*` 更简单。
+
+---
+
+## 9. 进阶：Einsum 的优化路径
+
+在 PyTorch 1.8+ 中，`torch.einsum` 支持 `optimize` 参数，可以选择默认优化或手动指定。对于包含多个输入、多个求和维度的张量收缩，优化路径可以减少内存使用和计算量。
+
+```python
+# 自动选择最优路径
+result = torch.einsum(equation, *operands, optimize=True)
+```
+
+在 NumPy 中，`np.einsum` 也有 `optimize` 参数，可以设为 `'greedy'` 或 `'optimal'`。
+
+---
+
+## 10. 总结
+
+**Einsum 的核心优势**：
+
+```
+一个函数，统一所有张量操作
+```
+
+**适合使用 Einsum 的场景**：
+
+```
+1. 复杂的张量收缩（如注意力机制）
+2. 需要同时进行多个操作的场合（如求和与乘积）
+3. 代码简洁性优先，且团队成员熟悉 Einstein 记法
+```
+
+**不适合的场景**：
+
+```
+1. 简单的元素级操作（如加、乘、激活函数）
+2. 对性能极度敏感且可用专用函数替代时
+3. 项目中有大量对 Einsum 不熟悉的同事
+```
+
+**核心公式记忆法**：
+
+```
+输出 = 对重复索引求和，保留未重复的索引
+```
+
+
+# PyTorch Seq2Seq 机器翻译与注意力机制完整笔记
+
+机器翻译（Machine Translation）是 NLP 中经典的序列到序列（Seq2Seq）任务，目标是将一种语言的句子翻译成另一种语言。本笔记涵盖基础 Seq2Seq 模型和带注意力机制的 Seq2Seq 模型，从零实现一个英译法的翻译系统。
+
+---
+
+## 1. Seq2Seq 核心思想：编码器-解码器架构
+
+Seq2Seq 模型采用编码器-解码器（Encoder-Decoder）架构，最早由 Sutskever 等人于 2014 年提出。
+
+```
+输入序列（英文）: "Hello how are you"
+    ↓
+编码器（Encoder）：RNN/LSTM/GRU 逐词读取，生成上下文向量
+    ↓
+上下文向量（Context Vector）：压缩了整个输入序列的信息
+    ↓
+解码器（Decoder）：RNN/LSTM/GRU 逐词生成输出序列
+    ↓
+输出序列（法语）: "Bonjour comment allez-vous"
+```
+
+### 1.1 编码器（Encoder）
+
+编码器读取输入序列，输出一个**上下文向量**（Context Vector）：
+
+```
+输入: "Hello" → "how" → "are" → "you"
+    ↓
+RNN 逐步处理，最终输出一个向量
+    ↓
+上下文向量（Encoder 的最终隐藏状态）
+```
+
+这个上下文向量是整个输入序列的“语义摘要”，传递给解码器作为初始状态。
+
+### 1.2 解码器（Decoder）
+
+解码器接收上下文向量，自回归地生成输出序列：
+
+```
+上下文向量 → 生成第一个词 → 生成第二个词 → ... → 生成 <end> 停止
+```
+
+- 解码器每一步输出一个词的概率分布
+- 选择概率最大的词作为输出
+- 将输出的词作为下一步的输入（自回归）
+- 直到生成 `<end>` 标记或达到最大长度
+
+### 1.3 训练：Teacher Forcing
+
+训练时，解码器的每一步输入是**真实的目标词**，而不是模型自己的预测。这样可以加速收敛，避免错误累积。
+
+```
+输入: "<start>" → "Bonjour" → "comment" → "allez-vous"
+目标: "Bonjour" → "comment" → "allez-vous" → "<end>"
+```
+
+---
+
+## 2. 数据准备与预处理
+
+### 2.1 数据加载
+
+使用 TorchText 加载英法翻译数据集：
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torchtext.legacy import data
+from torchtext.legacy import datasets
+import spacy
+
+# 加载分词器
+spacy_en = spacy.load('en_core_web_sm')
+spacy_fr = spacy.load('fr_core_news_sm')
+
+# 分词函数
+def tokenize_en(text):
+    return [tok.text for tok in spacy_en.tokenizer(text)]
+
+def tokenize_fr(text):
+    return [tok.text for tok in spacy_fr.tokenizer(text)]
+
+# 定义 Field
+SRC = data.Field(
+    tokenize=tokenize_en,
+    init_token='<sos>',
+    eos_token='<eos>',
+    lower=True,
+    batch_first=True,
+)
+
+TRG = data.Field(
+    tokenize=tokenize_fr,
+    init_token='<sos>',
+    eos_token='<eos>',
+    lower=True,
+    batch_first=True,
+)
+
+# 加载 Multi30k 数据集（英德翻译）
+# 实际可以替换为其他翻译数据集
+train_data, valid_data, test_data = datasets.Multi30k.splits(
+    exts=('.en', '.de'),
+    fields=(SRC, TRG),
+)
+
+# 构建词汇表
+SRC.build_vocab(train_data, min_freq=2, max_size=10000)
+TRG.build_vocab(train_data, min_freq=2, max_size=10000)
+```
+
+### 2.2 创建迭代器
+
+```python
+from torchtext.legacy.data import BucketIterator
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+train_iter, valid_iter, test_iter = BucketIterator.splits(
+    (train_data, valid_data, test_data),
+    batch_size=64,
+    sort_key=lambda x: len(x.src),
+    shuffle=True,
+    device=device,
+)
+
+# 查看一个批次
+batch = next(iter(train_iter))
+print(f"源序列形状: {batch.src.shape}")  # (batch, src_len)
+print(f"目标序列形状: {batch.trg.shape}")  # (batch, trg_len)
+```
+
+---
+
+## 3. 基础 Seq2Seq 模型实现
+
+### 3.1 编码器
+
+```python
+class Encoder(nn.Module):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers=2, dropout=0.5):
+        super(Encoder, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.lstm = nn.LSTM(
+            embedding_dim,
+            hidden_dim,
+            num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0,
+        )
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, src):
+        # src: (batch_size, src_len)
+        embedded = self.dropout(self.embedding(src))  # (batch, src_len, embed_dim)
+        outputs, (hidden, cell) = self.lstm(embedded)
+        # outputs: (batch, src_len, hidden_dim)
+        # hidden: (num_layers, batch, hidden_dim)
+        # cell:   (num_layers, batch, hidden_dim)
+        return hidden, cell
+```
+
+### 3.2 解码器（基础版）
+
+基础解码器只使用编码器的**最终隐藏状态**作为初始状态：
+
+```python
+class Decoder(nn.Module):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers=2, dropout=0.5):
+        super(Decoder, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.lstm = nn.LSTM(
+            embedding_dim,
+            hidden_dim,
+            num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0,
+        )
+        self.fc = nn.Linear(hidden_dim, vocab_size)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, trg, hidden, cell):
+        # trg: (batch_size, trg_len)
+        # hidden: (num_layers, batch, hidden_dim)
+        # cell:   (num_layers, batch, hidden_dim)
+
+        embedded = self.dropout(self.embedding(trg))  # (batch, trg_len, embed_dim)
+        outputs, (hidden, cell) = self.lstm(embedded, (hidden, cell))
+        # outputs: (batch, trg_len, hidden_dim)
+
+        predictions = self.fc(outputs)  # (batch, trg_len, vocab_size)
+        return predictions, hidden, cell
+```
+
+### 3.3 完整 Seq2Seq 模型
+
+```python
+class Seq2Seq(nn.Module):
+    def __init__(self, encoder, decoder, device):
+        super(Seq2Seq, self).__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.device = device
+
+    def forward(self, src, trg, teacher_forcing_ratio=0.5):
+        # src: (batch, src_len)
+        # trg: (batch, trg_len)
+
+        batch_size = src.size(0)
+        trg_len = trg.size(1)
+        trg_vocab_size = self.decoder.fc.out_features
+
+        # 存储所有时间步的输出
+        outputs = torch.zeros(batch_size, trg_len, trg_vocab_size).to(self.device)
+
+        # 编码器输出最终隐藏状态
+        hidden, cell = self.encoder(src)
+
+        # 解码器的第一个输入是 <sos>
+        input = trg[:, 0]  # (batch,)
+
+        for t in range(1, trg_len):
+            # 解码器单步前向传播
+            output, hidden, cell = self.decoder(
+                input.unsqueeze(1),  # (batch, 1)
+                hidden,
+                cell,
+            )
+            # output: (batch, 1, vocab_size)
+            outputs[:, t, :] = output.squeeze(1)
+
+            # Teacher Forcing 或使用预测
+            teacher_force = torch.rand(1).item() < teacher_forcing_ratio
+            top1 = output.argmax(2)  # (batch, 1)
+
+            if teacher_force:
+                input = trg[:, t]  # 使用真实目标词
+            else:
+                input = top1.squeeze(1)  # 使用模型预测
+
+        return outputs
+```
+
+---
+
+## 4. 训练流程
+
+### 4.1 训练循环
+
+```python
+def train(model, iterator, optimizer, criterion, clip=1.0):
+    model.train()
+    epoch_loss = 0
+
+    for batch in iterator:
+        src = batch.src
+        trg = batch.trg
+
+        optimizer.zero_grad()
+
+        # 前向传播
+        output = model(src, trg)
+
+        # 计算损失（忽略 <pad>）
+        output_dim = output.shape[-1]
+        output = output[:, 1:].reshape(-1, output_dim)  # 去掉 <sos>
+        trg = trg[:, 1:].reshape(-1)  # 去掉 <sos>
+
+        loss = criterion(output, trg)
+
+        # 反向传播
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+        optimizer.step()
+
+        epoch_loss += loss.item()
+
+    return epoch_loss / len(iterator)
+```
+
+### 4.2 评估循环
+
+```python
+def evaluate(model, iterator, criterion):
+    model.eval()
+    epoch_loss = 0
+
+    with torch.no_grad():
+        for batch in iterator:
+            src = batch.src
+            trg = batch.trg
+
+            # 评估时 teacher_forcing_ratio = 0
+            output = model(src, trg, teacher_forcing_ratio=0)
+
+            output_dim = output.shape[-1]
+            output = output[:, 1:].reshape(-1, output_dim)
+            trg = trg[:, 1:].reshape(-1)
+
+            loss = criterion(output, trg)
+            epoch_loss += loss.item()
+
+    return epoch_loss / len(iterator)
+```
+
+### 4.3 完整的训练过程
+
+```python
+# 超参数
+EMBED_DIM = 256
+HIDDEN_DIM = 512
+NUM_LAYERS = 2
+DROPOUT = 0.5
+LR = 0.001
+NUM_EPOCHS = 10
+
+# 初始化模型
+encoder = Encoder(len(SRC.vocab), EMBED_DIM, HIDDEN_DIM, NUM_LAYERS, DROPOUT)
+decoder = Decoder(len(TRG.vocab), EMBED_DIM, HIDDEN_DIM, NUM_LAYERS, DROPOUT)
+model = Seq2Seq(encoder, decoder, device).to(device)
+
+# 损失函数和优化器
+criterion = nn.CrossEntropyLoss(ignore_index=TRG.vocab.stoi['<pad>'])
+optimizer = optim.Adam(model.parameters(), lr=LR)
+
+# 训练
+best_valid_loss = float('inf')
+
+for epoch in range(NUM_EPOCHS):
+    train_loss = train(model, train_iter, optimizer, criterion)
+    valid_loss = evaluate(model, valid_iter, criterion)
+
+    print(f"Epoch {epoch+1}: Train Loss: {train_loss:.4f}, Valid Loss: {valid_loss:.4f}")
+
+    if valid_loss < best_valid_loss:
+        best_valid_loss = valid_loss
+        torch.save(model.state_dict(), 'seq2seq_best.pt')
+
+print("训练完成！")
+```
+
+---
+
+## 5. 推理（翻译）
+
+```python
+def translate_sentence(model, sentence, src_field, trg_field, max_len=50):
+    model.eval()
+
+    # 1. 分词并转换为索引
+    tokens = [tok.text.lower() for tok in spacy_en.tokenizer(sentence)]
+    tokens = ['<sos>'] + tokens + ['<eos>']
+    indices = [src_field.vocab.stoi[token] for token in tokens]
+    src_tensor = torch.tensor(indices).unsqueeze(0).to(device)  # (1, len)
+
+    # 2. 编码
+    hidden, cell = model.encoder(src_tensor)
+
+    # 3. 解码
+    trg_indices = [trg_field.vocab.stoi['<sos>']]
+
+    for _ in range(max_len):
+        input_tensor = torch.tensor([trg_indices[-1]]).unsqueeze(0).to(device)
+        output, hidden, cell = model.decoder(input_tensor, hidden, cell)
+
+        pred_token = output.argmax(2).item()
+        trg_indices.append(pred_token)
+
+        if pred_token == trg_field.vocab.stoi['<eos>']:
+            break
+
+    # 4. 转换为文本
+    translation = [trg_field.vocab.itos[idx] for idx in trg_indices[1:-1]]
+    return ' '.join(translation)
+
+# 测试翻译
+sentence = "I love programming in Python"
+translation = translate_sentence(model, sentence, SRC, TRG)
+print(f"英文: {sentence}")
+print(f"法语: {translation}")
+```
+
+---
+
+## 6. 注意力机制（Attention）
+
+基础 Seq2Seq 模型将整个输入序列压缩成一个固定长度的上下文向量，当输入序列较长时，这个向量会丢失早期位置的信息。**注意力机制**通过让解码器在每一步动态地关注输入序列的不同位置来解决这个问题。
+
+### 6.1 注意力核心思想
+
+```
+解码器生成第 t 个词时：
+    1. 查看编码器所有时间步的输出
+    2. 计算每个编码器输出与当前解码器状态的"相关性"（注意力权重）
+    3. 用这些权重加权求和编码器输出，得到上下文向量
+    4. 用上下文向量辅助当前词的预测
+```
+
+### 6.2 注意力权重的计算
+
+对于解码器的每个时间步 t 和编码器的每个位置 i：
+
+```
+score_ti = f(h_dec_t, h_enc_i)  # 计算相关性
+alpha_ti = softmax(score_t1, score_t2, ..., score_tn)  # 归一化为概率
+context_t = sum_i alpha_ti * h_enc_i  # 加权求和
+```
+
+### 6.3 注意力评分函数的变体
+
+| 方法 | 公式 | 说明 |
+|------|------|------|
+| Dot | `h_dec · h_enc` | 简单内积，要求维度相同 |
+| General | `h_dec^T · W · h_enc` | 可学习线性变换 |
+| Concat（Bahdanau） | `v^T · tanh(W₁·h_dec + W₂·h_enc)` | 最早用于 NMT |
+
+---
+
+## 7. 带注意力机制的 Seq2Seq
+
+### 7.1 注意力模块
+
+```python
+class Attention(nn.Module):
+    def __init__(self, hidden_dim):
+        super(Attention, self).__init__()
+        # Bahdanau 风格：使用 concat 评分
+        self.attn = nn.Linear(hidden_dim * 2, hidden_dim)
+        self.v = nn.Linear(hidden_dim, 1, bias=False)
+
+    def forward(self, hidden, encoder_outputs, mask=None):
+        # hidden: (batch, hidden_dim) - 解码器当前时间步的隐藏状态
+        # encoder_outputs: (batch, src_len, hidden_dim)
+
+        batch_size = encoder_outputs.size(0)
+        src_len = encoder_outputs.size(1)
+
+        # 扩展隐藏状态以匹配编码器输出的长度
+        hidden_expanded = hidden.unsqueeze(1).repeat(1, src_len, 1)
+        # (batch, src_len, hidden_dim)
+
+        # 拼接并计算注意力得分
+        energy = torch.tanh(self.attn(
+            torch.cat([hidden_expanded, encoder_outputs], dim=2)
+        ))  # (batch, src_len, hidden_dim)
+
+        attention = self.v(energy).squeeze(2)  # (batch, src_len)
+
+        # 如果有 mask，将填充位置的注意力设为 -inf
+        if mask is not None:
+            attention = attention.masked_fill(mask == 0, -1e10)
+
+        # Softmax 得到注意力权重
+        attn_weights = torch.softmax(attention, dim=1)  # (batch, src_len)
+
+        # 上下文向量：注意力权重加权求和
+        context = torch.bmm(attn_weights.unsqueeze(1), encoder_outputs).squeeze(1)
+        # (batch, hidden_dim)
+
+        return context, attn_weights
+```
+
+### 7.2 带注意力的解码器
+
+```python
+class AttnDecoder(nn.Module):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers=2, dropout=0.5):
+        super(AttnDecoder, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.lstm = nn.LSTM(
+            embedding_dim + hidden_dim,  # 输入：词嵌入 + 上下文向量
+            hidden_dim,
+            num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0,
+        )
+        self.attention = Attention(hidden_dim)
+        self.fc = nn.Linear(hidden_dim * 2, vocab_size)  # 拼接 LSTM 输出和上下文
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, input, hidden, cell, encoder_outputs, mask=None):
+        # input: (batch, 1) - 当前输入的词索引
+        # hidden: (num_layers, batch, hidden_dim)
+        # cell: (num_layers, batch, hidden_dim)
+
+        # 取最后一层的隐藏状态用于注意力计算
+        hidden_last = hidden[-1]  # (batch, hidden_dim)
+
+        # 计算注意力上下文向量
+        context, attn_weights = self.attention(hidden_last, encoder_outputs, mask)
+
+        # 嵌入输入词
+        embedded = self.dropout(self.embedding(input))  # (batch, 1, embed_dim)
+
+        # 将上下文向量与词嵌入拼接作为 LSTM 输入
+        lstm_input = torch.cat([embedded, context.unsqueeze(1)], dim=2)
+        # (batch, 1, embed_dim + hidden_dim)
+
+        # LSTM 前向传播
+        output, (hidden, cell) = self.lstm(lstm_input, (hidden, cell))
+        # output: (batch, 1, hidden_dim)
+
+        # 拼接 LSTM 输出和上下文用于预测
+        prediction_input = torch.cat([output.squeeze(1), context], dim=1)
+        # (batch, hidden_dim * 2)
+
+        prediction = self.fc(prediction_input)  # (batch, vocab_size)
+
+        return prediction, hidden, cell, attn_weights
+```
+
+### 7.3 完整的 Seq2Seq 模型（带注意力）
+
+```python
+class Seq2SeqWithAttention(nn.Module):
+    def __init__(self, encoder, decoder, device):
+        super(Seq2SeqWithAttention, self).__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.device = device
+
+    def forward(self, src, trg, teacher_forcing_ratio=0.5):
+        batch_size = src.size(0)
+        trg_len = trg.size(1)
+        trg_vocab_size = self.decoder.fc.out_features
+
+        outputs = torch.zeros(batch_size, trg_len, trg_vocab_size).to(self.device)
+        attn_weights_all = torch.zeros(batch_size, trg_len, src.size(1)).to(self.device)
+
+        # 编码器
+        encoder_outputs, (hidden, cell) = self.encoder(src)
+        # encoder_outputs: (batch, src_len, hidden_dim)
+
+        # 创建 mask：标记有效位置（非 <pad>）
+        mask = (src != SRC.vocab.stoi['<pad>'])
+
+        # 初始输入 <sos>
+        input = trg[:, 0]  # (batch,)
+
+        for t in range(1, trg_len):
+            output, hidden, cell, attn_weights = self.decoder(
+                input.unsqueeze(1),
+                hidden,
+                cell,
+                encoder_outputs,
+                mask,
+            )
+            # output: (batch, vocab_size)
+            outputs[:, t, :] = output
+            attn_weights_all[:, t, :] = attn_weights
+
+            # Teacher Forcing
+            teacher_force = torch.rand(1).item() < teacher_forcing_ratio
+            top1 = output.argmax(1)
+
+            if teacher_force:
+                input = trg[:, t]
+            else:
+                input = top1
+
+        return outputs, attn_weights_all
+```
+
+### 7.4 训练带注意力的模型
+
+训练代码与基础 Seq2Seq 几乎相同，只需将模型替换为 `Seq2SeqWithAttention`：
+
+```python
+# 初始化带注意力的模型
+encoder = Encoder(len(SRC.vocab), EMBED_DIM, HIDDEN_DIM, NUM_LAYERS, DROPOUT)
+decoder = AttnDecoder(len(TRG.vocab), EMBED_DIM, HIDDEN_DIM, NUM_LAYERS, DROPOUT)
+model = Seq2SeqWithAttention(encoder, decoder, device).to(device)
+
+# 其余训练代码与之前相同
+# ...
+```
+
+---
+
+## 8. 基础 Seq2Seq vs 带注意力 Seq2Seq
+
+| 对比方面 | 基础 Seq2Seq | 带注意力 Seq2Seq |
+|----------|-------------|------------------|
+| 上下文向量 | 固定长度的最终隐藏状态 | 动态计算的加权和 |
+| 长序列处理 | 早期信息易丢失 | 所有位置都可访问 |
+| 解码器输入 | 仅词嵌入 | 词嵌入 + 上下文向量 |
+| 可解释性 | 黑盒 | 注意力权重可可视化 |
+| 翻译质量 | 短句较好，长句下降 | 长句翻译质量更好 |
+
+---
+
+## 9. 注意力可视化
+
+```python
+import matplotlib.pyplot as plt
+
+def visualize_attention(src_sentence, trg_sentence, model, attn_weights):
+    # attn_weights: (trg_len, src_len)
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+    cax = ax.matshow(attn_weights, cmap='Blues')
+
+    # 设置刻度标签
+    ax.set_xticks(range(len(src_sentence)))
+    ax.set_yticks(range(len(trg_sentence)))
+    ax.set_xticklabels(src_sentence, rotation=90)
+    ax.set_yticklabels(trg_sentence)
+
+    ax.set_xlabel('Source (English)')
+    ax.set_ylabel('Target (French)')
+    ax.set_title('Attention Weights')
+    plt.tight_layout()
+    plt.show()
+
+# 翻译并可视化
+sentence = "I love programming in Python"
+tokens = [tok.text.lower() for tok in spacy_en.tokenizer(sentence)]
+
+# 获取翻译结果和注意力权重
+model.eval()
+# ... 执行翻译，保存注意力权重 ...
+
+# 可视化
+visualize_attention(tokens, translation_tokens, model, attn_weights)
+```
+
+---
+
+## 10. 常见错误
+
+### 10.1 编码器输出未传递给解码器
+
+基础 Seq2Seq 只传递隐藏状态，而注意力机制需要完整的编码器输出序列。
+
+```python
+# 正确：传递编码器所有时间步的输出
+encoder_outputs, (hidden, cell) = self.encoder(src)
+output, hidden, cell, attn_weights = self.decoder(
+    input, hidden, cell, encoder_outputs, mask
+)
+
+# 错误：只传递隐藏状态（无法计算注意力）
+output, hidden, cell = self.decoder(input, hidden, cell)
+```
+
+### 10.2 Mask 处理不当
+
+在计算注意力时，必须屏蔽 `<pad>` 位置，避免模型把注意力放到填充字符上。
+
+```python
+# 正确：创建 mask 并传递给注意力模块
+mask = (src != SRC.vocab.stoi['<pad>'])
+context, attn_weights = self.attention(hidden, encoder_outputs, mask)
+
+# 错误：没有屏蔽填充位置
+context, attn_weights = self.attention(hidden, encoder_outputs)
+```
+
+### 10.3 注意力输入维度错误
+
+注意力的 `hidden` 应该是解码器当前时间步的隐藏状态（最后一层），而不是所有层。
+
+```python
+# 正确：取最后一层
+hidden_last = hidden[-1]  # (batch, hidden_dim)
+
+# 错误：使用所有层
+hidden_all = hidden  # (num_layers, batch, hidden_dim) - 维度不匹配
+```
+
+### 10.4 Teacher Forcing 比例设置不当
+
+- 比例过高（如 1.0）：训练稳定，但模型不擅长自回归生成
+- 比例过低（如 0.0）：训练不稳定，难以收敛
+- 常用值：0.5 或从 1.0 逐渐降低到 0.0
+
+### 10.5 损失函数忽略 `<pad>` 标记
+
+```python
+# 正确：忽略填充
+criterion = nn.CrossEntropyLoss(ignore_index=TRG.vocab.stoi['<pad>'])
+
+# 错误：没有忽略填充
+criterion = nn.CrossEntropyLoss()
+```
+
+### 10.6 推理时使用正确的起始标记
+
+```python
+# 正确：以 <sos> 开始
+trg_indices = [TRG.vocab.stoi['<sos>']]
+
+# 错误：从空列表开始，第一个输入未知
+trg_indices = []
+```
+
+---
+
+## 11. 重点总结
+
+**Seq2Seq 核心架构**：
+
+```
+编码器（读取源序列）→ 上下文向量 → 解码器（生成目标序列）
+```
+
+**基础 Seq2Seq**：
+
+```
+使用最终隐藏状态作为上下文向量
+短句效果好，长句易丢失信息
+```
+
+**注意力机制**：
+
+```
+解码器动态关注编码器不同位置
+上下文向量 = 加权和（权重由注意力评分决定）
+长句翻译质量显著提升
+```
+
+**训练关键点**：
+
+```
+Teacher Forcing：训练时使用真实目标词作为输入
+使用 BucketIterator 按长度分批，减少填充量
+梯度裁剪防止梯度爆炸
+```
+
+**推理关键点**：
+
+```
+自回归生成：每步预测作为下一步输入
+Teacher Forcing Ratio = 0
+最大长度限制，防止无限循环
+```
+
+总结：
+
+```
+Seq2Seq 模型是机器翻译等序列到序列任务的基础框架。
+从简单编码器-解码器到带注意力机制，模型逐步解决了固定上下文向量
+的信息瓶颈问题。注意力机制不仅提升了翻译质量，还提供了模型
+决策的可解释性，是 Seq2Seq 架构中最重要的改进之一。
+```
+
+# PyTorch Transformer 
+
+## 1. Transformer 是什么？
+
+Transformer 是一种主要依靠注意力机制处理序列数据的模型。它最初用于机器翻译，后来广泛应用于：
+
+- 文本分类
+- 机器翻译
+- 文本生成
+- 图像识别
+- 语音处理
+- 多模态任务
+
+Transformer 的核心特点是：
+
+```
+不依赖 RNN 的逐步计算
+可以同时处理整个序列
+通过注意力机制建模不同位置之间的关系
+```
+
+原始 Transformer 由 Encoder 和 Decoder 组成：
+
+```
+源序列（例如英文）
+        ↓
+Encoder
+        ↓
+语义表示
+        ↓
+Decoder
+        ↓
+目标序列（例如中文）
+```
+
+PyTorch 的 `nn.Transformer` 实现了原始 Transformer 的基本结构，并支持 Encoder、Decoder、Mask 等功能。[PyTorch Transformer 文档](https://docs.pytorch.org/docs/stable/generated/torch.nn.Transformer)
+![](../图片/Pasted%20image%2020260814014229.png)
+---
+
+## 2. Transformer 的整体结构
+
+原始 Transformer 的结构：
+
+```
+输入 token
+    ↓
+Token Embedding
+    ↓
+Positional Encoding
+    ↓
+Encoder × N
+    ↓
+Decoder × N
+    ↓
+Linear
+    ↓
+Softmax
+    ↓
+输出 token
+```
+
+一个 Encoder Layer 包含：
+
+```
+Multi-Head Self-Attention
+        ↓
+残差连接 + LayerNorm
+        ↓
+Feed Forward Network
+        ↓
+残差连接 + LayerNorm
+```
+
+一个 Decoder Layer 包含：
+
+```
+Masked Multi-Head Self-Attention
+        ↓
+残差连接 + LayerNorm
+        ↓
+Cross-Attention
+        ↓
+残差连接 + LayerNorm
+        ↓
+Feed Forward Network
+        ↓
+残差连接 + LayerNorm
+```
+
+---
+
+## 3. Token Embedding
+
+模型不能直接处理单词，需要先把每个 token 转换成整数，再通过 Embedding 转换成向量：
+
+```
+"i"       → 5
+"like"    → 8
+"pytorch" → 20
+```
+
+然后：
+
+```
+embedding = nn.Embedding(
+    num_embeddings=vocab_size,
+    embedding_dim=d_model,
+)
+```
+
+如果输入形状为：
+
+```
+(batch_size, sequence_length)
+```
+
+经过 Embedding 后：
+
+```
+(batch_size, sequence_length, d_model)
+```
+
+其中：
+
+- `vocab_size`：词表大小。
+- `d_model`：每个 token 的向量维度。
+- `sequence_length`：序列长度。
+
+---
+
+## 4. 为什么需要位置编码？
+
+Transformer 的注意力机制本身没有顺序概念。
+
+例如：
+
+```
+I love PyTorch
+PyTorch love I
+```
+
+如果只看 token 集合，它们包含相同的单词，但顺序完全不同。
+
+因此需要给每个位置加入位置信息：
+
+```
+token embedding + positional encoding
+```
+
+常见的正弦位置编码公式：
+
+```
+PE(pos, 2i)   = sin(pos / 10000^(2i/d_model))
+PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))
+```
+
+简单实现：
+
+```
+import math  # 导入数学模块
+import torch  # 导入 PyTorch
+import torch.nn as nn  # 导入神经网络模块
+
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=5000):
+        super(PositionalEncoding, self).__init__()  # 初始化父类
+
+        position = torch.arange(
+            max_len
+        ).unsqueeze(1)  # 创建位置编号，形状为 (max_len, 1)
+
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2)
+            * (-math.log(10000.0) / d_model)
+        )  # 创建不同维度对应的频率
+
+        pe = torch.zeros(
+            max_len,
+            d_model,
+        )  # 创建位置编码矩阵
+
+        pe[:, 0::2] = torch.sin(
+            position * div_term
+        )  # 偶数维使用 sin
+
+        pe[:, 1::2] = torch.cos(
+            position * div_term
+        )  # 奇数维使用 cos
+
+        pe = pe.unsqueeze(0)  # 增加批次维度，变为 (1, max_len, d_model)
+
+        self.register_buffer(
+            "pe",
+            pe,
+        )  # 保存为 buffer，不作为模型参数训练
+
+    def forward(self, x):
+        sequence_length = x.size(1)  # 获取当前序列长度
+
+        x = x + self.pe[:, :sequence_length, :]  # 将位置编码加到 token embedding 上
+
+        return x  # 返回带有位置信息的表示
+```
+
+---
+
+## 5. Self-Attention
+
+Self-Attention 的作用是让序列中的每个位置关注其他位置。
+
+例如：
+
+```
+The animal didn't cross the street because it was tired.
+```
+
+模型需要判断 `it` 指的是 `animal` 还是 `street`。注意力机制可以帮助模型建立这种远距离关系。
+
+---
+
+## 6. Query、Key 和 Value
+
+对于输入序列中的每个 token，都会生成三个向量：
+
+```
+Query（Q）：我想寻找什么信息？
+Key（K）：我具有什么信息？
+Value（V）：如果被关注，实际传递什么信息？
+```
+
+计算过程：
+
+```
+Q = XWQ
+K = XWK
+V = XWV
+```
+
+注意力公式：
+
+```
+Attention(Q, K, V)
+= softmax(QKᵀ / √dₖ)V
+```
+![](../图片/Pasted%20image%2020260814013552.png)
+步骤如下：
+
+```
+Q 和 K 做点积
+      ↓
+除以 √dₖ，防止数值过大
+      ↓
+Softmax 转换为注意力权重
+      ↓
+与 V 加权求和
+```
+
+PyTorch 中可以直接使用：
+
+```
+attention = nn.MultiheadAttention(
+    embed_dim=d_model,
+    num_heads=num_heads,
+    batch_first=True,
+)
+```
+
+`MultiheadAttention` 的作用是让模型在多个表示子空间中同时关注不同信息。[PyTorch MultiheadAttention 文档](https://docs.pytorch.org/docs/stable/generated/torch.nn.MultiheadAttention.html)
+
+---
+
+## 7. Multi-Head Attention
+
+单个注意力头可能只能学习一种关系，因此 Transformer 使用多个注意力头。
+
+```
+输入
+ ↓
+分成多个 Head
+ ↓
+每个 Head 独立计算 Attention
+ ↓
+拼接所有 Head
+ ↓
+Linear
+```
+
+公式：
+
+```
+MultiHead(Q, K, V)
+= Concat(head₁, head₂, ..., headₕ)WO
+```
+
+例如：
+
+```
+d_model = 512
+num_heads = 8
+```
+
+每个注意力头的维度大约为：
+
+```
+512 / 8 = 64
+```
+
+要求：
+
+```
+d_model % num_heads == 0
+```
+
+否则无法平均分配每个 Head 的维度。
+
+---
+
+## 8. Feed Forward Network
+
+注意力层之后会接一个前馈网络：
+
+```
+Linear(d_model → dim_feedforward)
+        ↓
+ReLU 或 GELU
+        ↓
+Linear(dim_feedforward → d_model)
+```
+
+公式：
+
+```
+FFN(x) = Linear₂(Activation(Linear₁(x)))
+```
+
+它对每个位置独立进行相同的非线性变换：
+
+```
+self.feed_forward = nn.Sequential(
+    nn.Linear(d_model, dim_feedforward),  # 扩大特征维度
+    nn.ReLU(),  # 使用非线性激活函数
+    nn.Linear(dim_feedforward, d_model),  # 恢复到原始维度
+)
+```
+
+注意力层负责：
+
+```
+不同 token 之间的信息交互
+```
+
+前馈网络负责：
+
+```
+对每个 token 的特征进行进一步变换
+```
+
+---
+
+## 9. 残差连接和 LayerNorm
+
+Transformer 中经常使用：
+
+```
+输出 = LayerNorm(x + 子层输出)
+```
+
+其中：
+
+```
+x：原始输入
+子层输出：Attention 或 Feed Forward 的结果
+```
+
+代码形式：
+
+```
+x = x + attention_output  # 残差连接
+x = self.norm1(x)  # LayerNorm
+```
+
+残差连接的作用：
+
+- 保留原始信息
+- 缓解深层网络训练困难
+- 改善梯度传播
+
+LayerNorm 的作用：
+
+- 稳定特征分布
+- 加快训练
+- 减少训练不稳定
+
+---
+
+## 10. Encoder 和 Decoder 的区别
+
+### Encoder
+
+Encoder 的 Self-Attention 可以看到输入序列中的所有位置：
+
+```
+输入：I love PyTorch
+每个 token 可以关注整句话
+```
+
+### Decoder
+
+Decoder 通常需要使用 Mask，防止当前位置看到未来信息：
+
+```
+生成第 1 个词时，只能看到第 1 个位置
+生成第 2 个词时，只能看到前 2 个位置
+生成第 3 个词时，只能看到前 3 个位置
+```
+
+例如：
+
+```
+目标序列：<START> I love PyTorch
+```
+
+预测 `love` 时，不能提前看到 `PyTorch`。
+
+---
+
+## 11. Causal Mask
+
+Causal Mask 通常是一个上三角 Mask：
+
+```
+允许：0
+禁止：-inf
+```
+
+示例：
+
+```
+[0,    -inf, -inf, -inf]
+[0,     0,   -inf, -inf]
+[0,     0,    0,   -inf]
+[0,     0,    0,    0  ]
+```
+
+PyTorch 可以直接生成：
+
+```
+def generate_square_subsequent_mask(size, device):
+    mask = torch.triu(
+        torch.ones(size, size, device=device)
+        * float("-inf"),
+        diagonal=1,
+    )  # 创建上三角的未来信息遮挡矩阵
+
+    return mask  # 返回 causal mask
+```
+
+也可以使用：
+
+```
+tgt_mask = nn.Transformer.generate_square_subsequent_mask(
+    target_length
+).to(device)  # 生成目标序列的因果 Mask
+```
+
+在 PyTorch 中，如果传入 Bool 类型的 Transformer Mask，`True` 表示对应位置不允许参与注意力，这一点需要特别注意。[PyTorch Transformer 文档](https://docs.pytorch.org/docs/stable/generated/torch.nn.Transformer)
+
+---
+
+## 12. 使用 `nn.Transformer`
+
+PyTorch 提供了完整的 Transformer 模块：
+
+```
+transformer = nn.Transformer(
+    d_model=256,
+    nhead=8,
+    num_encoder_layers=3,
+    num_decoder_layers=3,
+    dim_feedforward=512,
+    dropout=0.1,
+    batch_first=True,
+)
+```
+
+设置 `batch_first=True` 后：
+
+```
+输入形状：(batch_size, sequence_length, d_model)
+```
+
+如果不设置，则默认形状为：
+
+```
+(sequence_length, batch_size, d_model)
+```
+
+初学时推荐设置：
+
+```
+batch_first=True
+```
+
+这样更符合常见的 DataLoader 输出格式。
+
+---
+
+## 13. 一个简单的 Transformer Seq2Seq 模型
+
+下面以一个简单的序列到序列任务为例：
+
+```
+class TransformerModel(nn.Module):
+    def __init__(
+        self,
+        src_vocab_size,
+        tgt_vocab_size,
+        d_model=256,
+        nhead=8,
+        num_layers=3,
+        dim_feedforward=512,
+        max_len=100,
+    ):
+        super(TransformerModel, self).__init__()  # 初始化父类
+
+        self.d_model = d_model  # 保存 token 表示维度
+
+        self.src_embedding = nn.Embedding(
+            src_vocab_size,
+            d_model,
+        )  # 创建源语言 Embedding
+
+        self.tgt_embedding = nn.Embedding(
+            tgt_vocab_size,
+            d_model,
+        )  # 创建目标语言 Embedding
+
+        self.src_positional_encoding = PositionalEncoding(
+            d_model,
+            max_len,
+        )  # 创建源序列位置编码
+
+        self.tgt_positional_encoding = PositionalEncoding(
+            d_model,
+            max_len,
+        )  # 创建目标序列位置编码
+
+        self.transformer = nn.Transformer(
+            d_model=d_model,
+            nhead=nhead,
+            num_encoder_layers=num_layers,
+            num_decoder_layers=num_layers,
+            dim_feedforward=dim_feedforward,
+            dropout=0.1,
+            batch_first=True,
+        )  # 创建完整 Transformer
+
+        self.output_layer = nn.Linear(
+            d_model,
+            tgt_vocab_size,
+        )  # 将 Transformer 输出映射到目标词表
+
+    def forward(
+        self,
+        src,
+        tgt,
+        tgt_mask=None,
+        src_key_padding_mask=None,
+        tgt_key_padding_mask=None,
+    ):
+        src = self.src_embedding(src)  # 将源 token 转换为向量
+        src = src * math.sqrt(self.d_model)  # 对 Embedding 进行缩放
+        src = self.src_positional_encoding(src)  # 加入源序列位置编码
+
+        tgt = self.tgt_embedding(tgt)  # 将目标 token 转换为向量
+        tgt = tgt * math.sqrt(self.d_model)  # 对 Embedding 进行缩放
+        tgt = self.tgt_positional_encoding(tgt)  # 加入目标序列位置编码
+
+        output = self.transformer(
+            src=src,
+            tgt=tgt,
+            tgt_mask=tgt_mask,
+            src_key_padding_mask=src_key_padding_mask,
+            tgt_key_padding_mask=tgt_key_padding_mask,
+        )  # 执行 Encoder 和 Decoder
+
+        output = self.output_layer(output)  # 输出每个位置对应的词表分数
+
+        return output  # 返回 logits
+```
+
+输出形状：
+
+```
+输入 src：
+(batch_size, source_length)
+
+输入 tgt：
+(batch_size, target_length)
+
+输出：
+(batch_size, target_length, tgt_vocab_size)
+```
+
+---
+
+## 14. 为什么要对 Embedding 进行缩放？
+
+原始 Transformer 通常使用：
+
+```
+embedding = embedding * math.sqrt(d_model)
+```
+
+这是因为位置编码与 token embedding 相加时，需要让两者的数值尺度比较合适。
+
+```
+src = src * math.sqrt(self.d_model)
+```
+
+这不是所有现代 Transformer 都必须显式写出的步骤，但在学习原始 Transformer 结构时非常常见。
+
+---
+
+## 15. Transformer 训练过程
+
+假设目标序列为：
+
+```
+<START> I love PyTorch <END>
+```
+
+训练时将目标序列错开一位：
+
+```
+Decoder 输入：
+<START> I love PyTorch
+
+预测目标：
+I love PyTorch <END>
+```
+
+代码：
+
+```
+tgt_input = tgt[:, :-1]  # 去掉最后一个 token，作为 Decoder 输入
+tgt_output = tgt[:, 1:]  # 去掉第一个 token，作为预测目标
+```
+
+生成 Mask：
+
+```
+target_length = tgt_input.size(1)  # 获取目标输入长度
+
+tgt_mask = nn.Transformer.generate_square_subsequent_mask(
+    target_length,
+    device=tgt_input.device,
+)  # 防止 Decoder 看到未来 token
+```
+
+模型训练：
+
+```
+logits = model(
+    src=src,
+    tgt=tgt_input,
+    tgt_mask=tgt_mask,
+)  # 得到每个目标位置的预测分数
+```
+
+计算损失：
+
+```
+criterion = nn.CrossEntropyLoss(
+    ignore_index=pad_idx
+)  # 忽略 <PAD> 位置的损失
+
+loss = criterion(
+    logits.reshape(-1, logits.size(-1)),
+    tgt_output.reshape(-1),
+)  # 展平所有时间步后计算交叉熵
+```
+
+完整训练步骤：
+
+```
+optimizer.zero_grad()  # 清除旧梯度
+loss.backward()  # 反向传播
+optimizer.step()  # 更新模型参数
+```
+
+---
+
+## 16. Padding Mask
+
+一个 batch 中的句子长度可能不同，需要使用 `<PAD>` 补齐：
+
+```
+[<START>, I, like, PyTorch, <END>]
+[<START>, I, agree, <END>, <PAD>]
+```
+
+模型不应该关注 `<PAD>` 位置，因此需要创建 Padding Mask：
+
+```
+src_key_padding_mask = (
+    src == pad_idx
+)  # True 表示对应位置是 PAD，需要被忽略
+
+tgt_key_padding_mask = (
+    tgt_input == pad_idx
+)  # 标记目标序列中的 PAD 位置
+```
+
+传入 Transformer：
+
+```
+logits = model(
+    src=src,
+    tgt=tgt_input,
+    tgt_mask=tgt_mask,
+    src_key_padding_mask=src_key_padding_mask,
+    tgt_key_padding_mask=tgt_key_padding_mask,
+)
+```
+
+需要区分两种 Mask：
+
+```
+Causal Mask：
+防止 Decoder 看到未来 token
+
+Padding Mask：
+忽略句子补齐出来的 PAD token
+```
+
+---
+
+## 17. Transformer 推理过程
+
+训练时可以一次输入完整目标序列，但推理时没有真实目标句子，只能逐步生成。
+
+```
+输入 src
+   ↓
+Decoder 输入 <START>
+   ↓
+预测第一个 token
+   ↓
+把预测结果拼接到 Decoder 输入
+   ↓
+继续预测
+   ↓
+直到生成 <END>
+```
+
+简单贪心搜索代码：
+
+```
+def greedy_decode(
+    model,
+    src,
+    start_idx,
+    end_idx,
+    max_length,
+):
+    model.eval()  # 切换到评估模式
+
+    generated = torch.tensor(
+        [[start_idx]],
+        device=src.device,
+    )  # 用 <START> 初始化目标序列
+
+    with torch.inference_mode():
+        for _ in range(max_length - 1):
+            target_length = generated.size(1)  # 获取当前目标序列长度
+
+            tgt_mask = nn.Transformer.generate_square_subsequent_mask(
+                target_length,
+                device=src.device,
+            )  # 创建当前长度对应的 causal mask
+
+            logits = model(
+                src=src,
+                tgt=generated,
+                tgt_mask=tgt_mask,
+            )  # 预测目标序列每个位置的 logits
+
+            next_token = logits[:, -1, :].argmax(
+                dim=-1,
+                keepdim=True,
+            )  # 只取最后一个位置的预测结果
+
+            generated = torch.cat(
+                [generated, next_token],
+                dim=1,
+            )  # 将新 token 拼接到生成序列后面
+
+            if next_token.item() == end_idx:
+                break  # 生成 <END> 后停止
+
+    return generated  # 返回生成的 token 序列
+```
+
+这里使用的是贪心搜索：
+
+```
+每一步都选择当前概率最高的 token
+```
+
+更复杂的生成方法还包括：
+
+- Beam Search
+- Top-k Sampling
+- Top-p Sampling
+- Temperature Sampling
+
+---
+
+## 18. Encoder-only、Decoder-only 和 Encoder-Decoder
+
+Transformer 不只有一种结构。
+
+### Encoder-only
+
+例如 BERT：
+
+```
+输入文本 → Encoder → 分类或特征表示
+```
+
+常用于：
+
+- 文本分类
+- 命名实体识别
+- 句子匹配
+
+### Decoder-only
+
+例如 GPT：
+
+```
+已有文本 → Decoder → 预测下一个 token
+```
+
+常用于：
+
+- 文本生成
+- 对话
+- 代码生成
+
+### Encoder-Decoder
+
+例如原始 Transformer、T5：
+
+```
+源文本 → Encoder
+目标文本 → Decoder
+```
+
+常用于：
+
+- 机器翻译
+- 文本摘要
+- 图像描述
+- 语音转文本
+
+---
+
+## 19. Transformer 与 RNN 的区别
+
+### RNN
+
+```
+第 1 个 token → 第 2 个 token → 第 3 个 token
+```
+
+必须按顺序处理，难以并行。
+
+### Transformer
+
+```
+整个序列同时输入
+通过 Attention 建立不同位置之间的关系
+```
+
+优势：
+
+- 更容易并行训练
+- 更擅长处理长距离依赖
+- 可以灵活关注序列中的任意位置
+
+缺点：
+
+- 注意力计算通常需要较多显存
+- 序列越长，计算量越大
+- 必须额外加入位置编码
+
+---
+
+## 20. 一个简化的 Transformer Encoder 分类模型
+
+如果只是做文本分类，不需要完整的 Decoder，可以只使用 Encoder：
+
+```
+class TransformerClassifier(nn.Module):
+    def __init__(
+        self,
+        vocab_size,
+        num_classes,
+        d_model=128,
+        nhead=4,
+        num_layers=2,
+        max_len=256,
+    ):
+        super(TransformerClassifier, self).__init__()  # 初始化父类
+
+        self.embedding = nn.Embedding(
+            vocab_size,
+            d_model,
+            padding_idx=0,
+        )  # 创建词嵌入层
+
+        self.position = PositionalEncoding(
+            d_model,
+            max_len,
+        )  # 创建位置编码
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=256,
+            dropout=0.1,
+            batch_first=True,
+        )  # 创建一个 Encoder 层
+
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer,
+            num_layers=num_layers,
+        )  # 堆叠多个 Encoder 层
+
+        self.fc = nn.Linear(
+            d_model,
+            num_classes,
+        )  # 创建分类层
+
+    def forward(self, token_ids):
+        padding_mask = (
+            token_ids == 0
+        )  # 标记 PAD 位置
+
+        x = self.embedding(token_ids)  # 将 token 转换为向量
+        x = x * math.sqrt(self.embedding.embedding_dim)  # 缩放 Embedding
+        x = self.position(x)  # 加入位置编码
+
+        x = self.encoder(
+            x,
+            src_key_padding_mask=padding_mask,
+        )  # 使用 Transformer Encoder 编码序列
+
+        valid_tokens = ~padding_mask  # 找到非 PAD 位置
+        lengths = valid_tokens.sum(dim=1).clamp(min=1)  # 获取每个句子的有效长度
+
+        mask = valid_tokens.unsqueeze(-1)  # 扩展 Mask 维度
+        x = x * mask  # 将 PAD 位置的特征置为 0
+
+        x = x.sum(dim=1) / lengths.unsqueeze(1)  # 对有效 token 做平均池化
+
+        logits = self.fc(x)  # 输出分类分数
+        return logits  # 返回分类结果
+```
+
+---
+
+## 21. 常见错误
+
+### 忘记位置编码
+
+错误：
+
+```
+x = embedding(token_ids)
+output = transformer(x)
+```
+
+正确：
+
+```
+x = embedding(token_ids)
+x = positional_encoding(x)
+output = transformer(x)
+```
+
+### 忘记目标 Mask
+
+Decoder 如果没有 Causal Mask，训练时可能看到未来答案，导致训练结果虚高，但推理时表现很差。
+
+```
+tgt_mask = nn.Transformer.generate_square_subsequent_mask(
+    target_length
+)
+```
+
+### `batch_first` 设置不一致
+
+如果设置：
+
+```
+batch_first=True
+```
+
+输入必须是：
+
+```
+(batch_size, sequence_length, d_model)
+```
+
+如果没有设置，输入默认是：
+
+```
+(sequence_length, batch_size, d_model)
+```
+
+### `d_model` 不能被 `nhead` 整除
+
+错误：
+
+```
+d_model=128
+nhead=3
+```
+
+正确：
+
+```
+d_model=128
+nhead=4
+```
+
+因为：
+
+```
+128 / 4 = 32
+```
+
+### 没有忽略 Padding
+
+需要传入：
+
+```
+src_key_padding_mask=src == pad_idx
+```
+
+否则模型会把 `<PAD>` 当作正常 token 学习。
+
+### 训练时直接使用预测结果
+
+训练时一般使用 Teacher Forcing：
+
+```
+输入真实的前一个 token
+```
+
+推理时才使用模型上一步的预测结果。
+
+---
+
+## 22. 重点总结
+
+Transformer 的核心组成：
+
+```
+Token Embedding
+      ↓
+Positional Encoding
+      ↓
+Multi-Head Attention
+      ↓
+残差连接 + LayerNorm
+      ↓
+Feed Forward Network
+      ↓
+残差连接 + LayerNorm
+```
+
+核心注意力公式：
+
+```
+Attention(Q, K, V)
+= softmax(QKᵀ / √dₖ)V
+```
+
+PyTorch 中常用模块：
+
+```
+nn.Embedding()  # 将 token 编号转换为向量
+nn.MultiheadAttention()  # 多头注意力
+nn.TransformerEncoderLayer()  # Encoder 层
+nn.TransformerEncoder()  # Encoder 堆叠
+nn.Transformer()  # 完整 Encoder-Decoder Transformer
+```
+
+Transformer 的输入输出形状：
+
+```
+token_ids：
+(batch_size, sequence_length)
+
+Embedding 后：
+(batch_size, sequence_length, d_model)
+
+Transformer 输出：
+(batch_size, sequence_length, d_model)
+
+分类或词预测 logits：
+(batch_size, sequence_length, vocab_size)
+```
+
+总结：
+
+```
+Transformer 通过 Self-Attention 让序列中的每个位置动态关注其他位置，
+再结合位置编码、残差连接、LayerNorm 和前馈网络，
+完成对序列信息的高效建模。
+```
+
+
+
+
+![](../图片/Pasted%20image%2020260814015237.png)
+# PyTorch 从零实现 U-Net 图像分割
+
+图像分割是将每个像素分类到特定类别的任务。U-Net 是 2015 年提出的经典架构，以 U 形结构和跳跃连接著称，能在少量数据下获得出色分割效果。[原始论文](https://arxiv.org/abs/1505.04597)
+
+---
+
+## 1. 核心思想：编码器-解码器 + 跳跃连接
+
+U-Net 通过对称的 U 形结构同时解决两个问题：**语义理解**（“是什么”）和**空间定位**（“在哪里”）。
+
+
+**跳跃连接的核心价值**：
+- 编码器浅层特征包含边缘、纹理等**细节**信息，对精确定位边界至关重要
+- 通过跳跃连接，解码器可直接访问这些细节，结合深层语义特征，实现精准分割
+- 同时缓解梯度消失，加速收敛
+
+---
+
+## 2. 数据准备要点
+
+- **图像**：RGB 三通道，通常归一化到 ImageNet 均值标准差。
+- **掩码（Mask）** ：单通道灰度图，像素值为类别索引（0, 1, 2, ...）。**必须保持整数，不能归一化**。
+- **数据增强**：对图像和掩码施加完全相同的变换（旋转、翻转等），保持对应关系。
+
+---
+
+## 3. 模型核心实现
+
+### 3.1 双卷积块（DoubleConv）
+
+两个 3×3 卷积堆叠，感受野相当于 5×5，但参数量更少。
+
+```python
+class DoubleConv(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(DoubleConv, self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x):
+        return self.conv(x)
+```
+
+### 3.2 下采样块（Down）
+
+通过最大池化降低空间维度，同时增加通道数。
+
+```python
+class Down(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(Down, self).__init__()
+        self.maxpool_conv = nn.Sequential(
+            nn.MaxPool2d(2),                # 尺寸减半
+            DoubleConv(in_channels, out_channels)  # 通道加倍
+        )
+
+    def forward(self, x):
+        return self.maxpool_conv(x)
+```
+
+### 3.3 上采样块（Up）
+
+上采样后与编码器对应层拼接，然后双卷积。
+
+```python
+class Up(nn.Module):
+    def __init__(self, in_channels, out_channels, bilinear=True):
+        super(Up, self).__init__()
+        # 上采样方式：双线性插值（无参数）或转置卷积
+        if bilinear:
+            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        else:
+            self.up = nn.ConvTranspose2d(in_channels // 2, in_channels // 2, 2, stride=2)
+
+        self.conv = DoubleConv(in_channels, out_channels)
+
+    def forward(self, x1, x2):
+        # x1: 下层特征（解码器）, x2: 编码器对应层特征
+        x1 = self.up(x1)
+
+        # 处理尺寸不一致（可能因像素偏移差1）
+        diffY = x2.size()[2] - x1.size()[2]
+        diffX = x2.size()[3] - x1.size()[3]
+        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
+                        diffY // 2, diffY - diffY // 2])
+
+        x = torch.cat([x2, x1], dim=1)  # 拼接（跳跃连接）
+        return self.conv(x)
+```
+
+### 3.4 完整 U-Net
+
+```python
+class UNet(nn.Module):
+    def __init__(self, n_channels=3, n_classes=1, bilinear=True):
+        super(UNet, self).__init__()
+        self.inc = DoubleConv(n_channels, 64)          # 第1层
+        self.down1 = Down(64, 128)                     # 第2层
+        self.down2 = Down(128, 256)                    # 第3层
+        self.down3 = Down(256, 512)                    # 第4层
+        factor = 2 if bilinear else 1
+        self.down4 = Down(512, 1024 // factor)         # 瓶颈层
+
+        self.up1 = Up(1024, 512 // factor, bilinear)   # 上采样1
+        self.up2 = Up(512, 256 // factor, bilinear)    # 上采样2
+        self.up3 = Up(256, 128 // factor, bilinear)    # 上采样3
+        self.up4 = Up(128, 64, bilinear)               # 上采样4
+        self.outc = nn.Conv2d(64, n_classes, kernel_size=1)  # 1×1卷积输出
+
+    def forward(self, x):
+        x1 = self.inc(x)      # 64通道
+        x2 = self.down1(x1)   # 128
+        x3 = self.down2(x2)   # 256
+        x4 = self.down3(x3)   # 512
+        x5 = self.down4(x4)   # 1024
+
+        x = self.up1(x5, x4)  # 结合第4层
+        x = self.up2(x, x3)   # 结合第3层
+        x = self.up3(x, x2)   # 结合第2层
+        x = self.up4(x, x1)   # 结合第1层
+        logits = self.outc(x)
+        return logits
+```
+
+---
+
+## 4. 损失函数与评估
+
+### 4.1 Dice Loss
+
+Dice 系数衡量两个集合的相似度，天然处理类别不平衡：
+
+```python
+def dice_loss(pred, target, smooth=1e-6):
+    # pred: (batch, n_classes, H, W) 概率（softmax后）
+    # target: (batch, H, W) 整数标签
+    pred = torch.softmax(pred, dim=1)
+    n_classes = pred.size(1)
+    target_one_hot = F.one_hot(target, n_classes).permute(0,3,1,2).float()
+    intersection = (pred * target_one_hot).sum(dim=(2,3))
+    union = pred.sum(dim=(2,3)) + target_one_hot.sum(dim=(2,3))
+    dice = (2.*intersection + smooth) / (union + smooth)
+    return 1 - dice.mean()
+```
+
+### 4.2 常用组合：BCE + Dice（二分类）
+
+```python
+class CombinedLoss(nn.Module):
+    def __init__(self, weight_bce=1.0, weight_dice=1.0):
+        super().__init__()
+        self.bce = nn.BCEWithLogitsLoss()
+        self.weight_bce = weight_bce
+        self.weight_dice = weight_dice
+
+    def forward(self, pred, target):
+        # pred: (batch, 1, H, W), target: (batch, H, W) 0/1
+        bce = self.bce(pred.squeeze(1), target.float())
+        pred_sigmoid = torch.sigmoid(pred.squeeze(1))
+        dice = 1 - (2.*(pred_sigmoid * target.float()).sum() + 1e-6) / (pred_sigmoid.sum() + target.float().sum() + 1e-6)
+        return self.weight_bce * bce + self.weight_dice * dice
+```
+
+### 4.3 评估指标：IoU
+
+```python
+def iou_score(pred, target, n_classes):
+    pred = torch.softmax(pred, dim=1).argmax(dim=1)  # (batch, H, W)
+    ious = []
+    for cls in range(n_classes):
+        pred_cls = (pred == cls)
+        target_cls = (target == cls)
+        intersection = (pred_cls & target_cls).sum().float()
+        union = (pred_cls | target_cls).sum().float()
+        ious.append((intersection + 1e-6) / (union + 1e-6))
+    return torch.tensor(ious).mean()
+```
+
+---
+
+## 5. 训练循环要点
+
+```python
+model = UNet(n_channels=3, n_classes=1).to(device)
+optimizer = optim.Adam(model.parameters(), lr=1e-4)
+criterion = CombinedLoss()
+
+for epoch in range(num_epochs):
+    model.train()
+    for images, masks in train_loader:   # masks: (batch, H, W) 整数
+        images, masks = images.to(device), masks.to(device)
+        preds = model(images)            # (batch, 1, H, W)
+        loss = criterion(preds, masks)
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+    # 验证逻辑类似，但 model.eval() + torch.no_grad()
+```
+
+**关键点**：
+- 掩码类型为 `torch.long`，值在 [0, num_classes-1]
+- 梯度裁剪（`clip_grad_norm_`）可防止梯度爆炸
+- 使用 `BucketIterator` 按图像大小分批可减少填充量
+
+---
+
+## 6. 常见陷阱
+
+| 陷阱 | 正确做法 |
+|------|---------|
+| 掩码被归一化 | 保持整数，不用 ToTensor 或归一化 |
+| 输出通道与损失不匹配 | 二分类：1通道+sigmoid+BCE 或 2通道+softmax+CrossEntropy |
+| 跳跃连接尺寸差1 | 在 Up 块中裁剪填充对齐 |
+| 数据增强不一致 | 对图像和掩码施加相同变换（用固定种子） |
+| 预测时忘记归一化 | 测试时使用训练时相同的均值和标准差 |
+
+---
+
+## 7. 重点总结
+
+**U-Net 核心设计**：
+
+```
+1. 编码器：下采样提取语义（通道增加，尺寸减小）
+2. 解码器：上采样恢复分辨率（通道减少，尺寸增加）
+3. 跳跃连接：拼接编码器特征，融合细节与语义
+```
+
+**与分类网络的区别**：
+
+| 方面 | 分类 | 分割 |
+|------|------|------|
+| 输出 | 一个向量 | 全图每个像素 |
+| 空间尺寸 | 不断减小 | 最终复原 |
+| 关键操作 | 全连接/池化 | 上采样/跳跃连接 |
+| 损失 | CrossEntropy | Dice / 组合损失 |
+
+**本质理解**：
+
+```
+U-Net 通过跳跃连接让解码器同时看到“全局语义”和“局部细节”，
+这是它能在小数据集上成功的关键。
+```
+
+# PyTorch 目标检测与 YOLO 
+
+## 1. 什么是目标检测？
+
+目标检测不仅要判断图片中有什么，还要找到每个目标的位置。
+
+```
+图像分类：
+这张图片中有一只猫
+
+目标检测：
+这张图片中有一只猫
+猫的位置是 [x1, y1, x2, y2]
+```
+
+目标检测通常需要同时完成：
+
+```
+分类：目标属于什么类别？
+定位：目标在图片中的什么位置？
+数量：图片中有多少个目标？
+```
+
+一个检测结果通常包含：
+
+```
+Bounding Box：目标框
+Class：目标类别
+Confidence：模型对检测结果的置信度
+```
+
+例如：
+
+```
+类别：dog
+边界框：[100, 50, 300, 280]
+置信度：0.92
+```
+
+---
+
+## 2. 边界框的表示方式
+
+最常见的边界框格式有两种。
+
+### `xyxy` 格式
+
+```
+[x_min, y_min, x_max, y_max]
+```
+
+例如：
+
+```
+box = [100, 50, 300, 280]
+```
+
+表示：
+
+```
+左上角：(100, 50)
+右下角：(300, 280)
+```
+
+### `xywh` 格式
+
+```
+[x_center, y_center, width, height]
+```
+
+例如：
+
+```
+box = [200, 165, 200, 230]
+```
+
+表示：
+
+```
+中心点：(200, 165)
+宽度：200
+高度：230
+```
+
+YOLO 数据集标注通常使用归一化后的 `xywh` 格式：
+
+```
+class_id x_center y_center width height
+```
+
+所有坐标都除以图片宽度或高度，因此范围通常是：
+
+```
+x_center, y_center, width, height ∈ [0, 1]
+```
+
+---
+
+## 3. IoU：交并比
+
+IoU（Intersection over Union）用于衡量两个边界框的重叠程度：
+
+```
+IoU = 交集面积 / 并集面积
+```
+
+示意：
+
+```
+两个框重叠越多 → IoU 越接近 1
+两个框完全不重叠 → IoU = 0
+```
+
+IoU 常用于：
+
+- 判断预测框是否正确
+- 计算检测损失
+- 执行 NMS
+- 计算 mAP
+
+一个简单的 PyTorch 实现：
+
+```
+def intersection_over_union(boxes_preds, boxes_labels):
+    """
+    boxes_preds 和 boxes_labels 使用 xyxy 格式：
+    [x_min, y_min, x_max, y_max]
+    """
+
+    x1 = torch.max(
+        boxes_preds[..., 0],
+        boxes_labels[..., 0],
+    )  # 计算交集左上角的 x 坐标
+
+    y1 = torch.max(
+        boxes_preds[..., 1],
+        boxes_labels[..., 1],
+    )  # 计算交集左上角的 y 坐标
+
+    x2 = torch.min(
+        boxes_preds[..., 2],
+        boxes_labels[..., 2],
+    )  # 计算交集右下角的 x 坐标
+
+    y2 = torch.min(
+        boxes_preds[..., 3],
+        boxes_labels[..., 3],
+    )  # 计算交集右下角的 y 坐标
+
+    intersection = (
+        (x2 - x1).clamp(min=0)
+        * (y2 - y1).clamp(min=0)
+    )  # 计算交集面积
+
+    pred_area = (
+        (boxes_preds[..., 2] - boxes_preds[..., 0]).clamp(min=0)
+        * (boxes_preds[..., 3] - boxes_preds[..., 1]).clamp(min=0)
+    )  # 计算预测框面积
+
+    label_area = (
+        (boxes_labels[..., 2] - boxes_labels[..., 0]).clamp(min=0)
+        * (boxes_labels[..., 3] - boxes_labels[..., 1]).clamp(min=0)
+    )  # 计算真实框面积
+
+    union = pred_area + label_area - intersection  # 计算并集面积
+
+    return intersection / (union + 1e-6)  # 返回 IoU，避免除以 0
+```
+
+---
+
+## 4. YOLO 的核心思想
+
+YOLO 的全称是：
+
+```
+You Only Look Once
+```
+
+YOLO 将目标检测看作一个整体的回归问题：一次性读取整张图片，同时预测目标的位置和类别。[YOLO 原始论文](https://arxiv.org/abs/1506.02640)
+
+基本流程：
+
+```
+整张图片
+    ↓
+CNN Backbone 提取特征
+    ↓
+Detection Head 输出预测结果
+    ↓
+解码边界框和类别
+    ↓
+置信度筛选
+    ↓
+NMS 去除重复框
+```
+
+与需要先生成候选区域的两阶段检测器相比，YOLO 属于单阶段检测器：
+
+```
+两阶段方法：
+候选区域 → 分类和回归
+
+YOLO：
+整张图片 → 直接预测边界框和类别
+```
+
+---
+
+## 5. YOLO 的网格思想
+
+以 YOLOv1 为例，模型将图片划分为 `S×S` 的网格：
+
+```
+S = 7
+
+整张图片 → 7×7 网格
+```
+
+如果一个目标的中心落在某个网格中，那么这个网格负责预测该目标。
+
+每个网格可以预测：
+
+```
+B 个边界框
+每个框的 5 个值：
+    x, y, w, h, confidence
+C 个类别概率
+```
+
+因此输出大小为：
+
+```
+S × S × (B × 5 + C)
+```
+
+例如原始 YOLOv1：
+
+```
+S = 7
+B = 2
+C = 20
+```
+
+输出为：
+
+```
+7 × 7 × (2 × 5 + 20)
+= 7 × 7 × 30
+```
+
+---
+
+## 6. 一个预测框包含什么？
+
+一个 YOLO 预测框通常包含：
+
+```
+x：框中心点相对于网格的位置
+y：框中心点相对于网格的位置
+w：框的宽度
+h：框的高度
+objectness：该框中是否存在目标
+class scores：目标属于每个类别的分数
+```
+
+检测结果的最终置信度通常可以理解为：
+
+```
+最终类别置信度
+= objectness × class probability
+```
+
+例如：
+
+```
+objectness = 0.9
+cat probability = 0.8
+
+最终 cat 置信度 = 0.9 × 0.8 = 0.72
+```
+
+---
+
+## 7. 现代 YOLO 与 YOLOv1 的区别
+
+YOLOv1 的网格思想非常适合学习目标检测，但现代 YOLO 版本通常还会加入：
+
+```
+多尺度检测
+更复杂的 Backbone
+Feature Pyramid
+Anchor 或 Anchor-free 预测方式
+更合理的边界框损失
+更先进的数据增强
+更好的标签分配方法
+```
+
+因此：
+
+```
+YOLOv1 的 S×S×(B×5+C)
+```
+
+主要是帮助理解 YOLO 的基本思想。
+
+现代 YOLO 的输出通常是多个尺度的特征图，例如：
+
+```
+小目标检测层：80×80
+中目标检测层：40×40
+大目标检测层：20×20
+```
+
+这样可以同时检测不同大小的目标。
+
+---
+
+## 8. YOLO 模型的组成
+
+一个 YOLO 检测器通常由三部分组成。
+
+### Backbone
+
+用于提取图像特征：
+
+```
+输入图片 → 多层卷积 → 特征图
+```
+
+常见 Backbone：
+
+```
+Darknet
+CSPDarknet
+ResNet
+EfficientNet
+```
+
+### Neck
+
+用于融合不同尺度的特征：
+
+```
+浅层特征：分辨率高，适合小目标
+深层特征：语义信息强，适合大目标
+```
+
+常见结构：
+
+```
+FPN
+PAN
+```
+
+### Detection Head
+
+负责预测：
+
+```
+边界框坐标
+目标置信度
+类别分数
+```
+
+---
+
+## 9. PyTorch 中的简单 YOLO Detection Head
+
+假设 Backbone 输出：
+
+```
+(batch_size, 256, 20, 20)
+```
+
+每个网格预测：
+
+```
+3 个框
+4 个坐标
+1 个 objectness
+num_classes 个类别分数
+```
+
+那么每个框需要：
+
+```
+5 + num_classes
+```
+
+个输出。
+
+Detection Head 可以写成：
+
+```
+import torch
+import torch.nn as nn
+
+
+class YOLODetectionHead(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        num_classes,
+        num_anchors=3,
+    ):
+        super(YOLODetectionHead, self).__init__()  # 初始化父类
+
+        self.num_classes = num_classes  # 保存类别数量
+        self.num_anchors = num_anchors  # 保存每个网格的预测框数量
+
+        self.prediction = nn.Conv2d(
+            in_channels,
+            num_anchors * (5 + num_classes),
+            kernel_size=1,
+        )  # 使用 1×1 卷积输出每个网格的检测结果
+
+    def forward(self, x):
+        output = self.prediction(x)  # 输出原始预测结果
+
+        batch_size, _, height, width = output.shape  # 获取输出形状
+
+        output = output.view(
+            batch_size,
+            self.num_anchors,
+            5 + self.num_classes,
+            height,
+            width,
+        )  # 将通道维度拆分为 anchors 和预测值
+
+        output = output.permute(
+            0,
+            1,
+            3,
+            4,
+            2,
+        )  # 变为 (batch, anchors, grid_h, grid_w, prediction_dim)
+
+        return output  # 返回 YOLO 预测结果
+```
+
+输出形状：
+
+```
+(batch_size, num_anchors, grid_height, grid_width, 5 + num_classes)
+```
+
+例如：
+
+```
+(batch, 3, 20, 20, 5 + 10)
+```
+
+---
+
+## 10. YOLO 的训练目标
+
+对于每个网格和每个预测框，模型需要学习：
+
+```
+边界框坐标损失
+objectness 损失
+类别分类损失
+```
+
+总损失可以写成：
+
+```
+Loss =
+λ_box × Box Loss
++ λ_obj × Objectness Loss
++ λ_noobj × No-object Loss
++ λ_cls × Class Loss
+```
+
+### Box Loss
+
+衡量预测框和真实框的位置差异：
+
+```
+预测框离真实框越近，损失越小
+```
+
+现代检测器常使用：
+
+```
+IoU Loss
+GIoU Loss
+DIoU Loss
+CIoU Loss
+```
+
+### Objectness Loss
+
+判断当前预测框是否包含目标：
+
+```
+有目标 → objectness 应该接近 1
+没有目标 → objectness 应该接近 0
+```
+
+### Classification Loss
+
+当网格中存在目标时，预测目标属于哪个类别：
+
+```
+cat、dog、car 等类别
+```
+
+背景网格通常不计算分类损失，否则背景数量太多，会影响训练。
+
+---
+
+## 11. YOLO 标签如何分配？
+
+假设目标中心坐标是：
+
+```
+x_center = 0.62
+y_center = 0.35
+```
+
+对于 `S=7` 的网格：
+
+```
+grid_x = int(x_center * S)  # 得到目标中心所在的列
+grid_y = int(y_center * S)  # 得到目标中心所在的行
+```
+
+得到：
+
+```
+grid_x = 4
+grid_y = 2
+```
+
+表示：
+
+```
+第 2 行、第 4 列的网格负责预测这个目标
+```
+
+网格内部的相对坐标：
+
+```
+x_cell = x_center * S - grid_x  # 计算目标中心在网格中的相对 x 坐标
+y_cell = y_center * S - grid_y  # 计算目标中心在网格中的相对 y 坐标
+```
+
+这些坐标通常位于：
+
+```
+[0, 1]
+```
+
+---
+
+## 12. 一个简单的数据集格式
+
+目标检测中，一张图片可能对应多个目标，因此 Dataset 通常返回：
+
+```
+image, target
+```
+
+其中 `target` 可以包含：
+
+```
+target = {
+    "boxes": boxes,  # 形状为 (num_objects, 4)
+    "labels": labels,  # 形状为 (num_objects,)
+}
+```
+
+示例：
+
+```
+target = {
+    "boxes": torch.tensor([
+        [50, 40, 180, 220],
+        [250, 100, 420, 300],
+    ], dtype=torch.float32),  # 两个目标框
+
+    "labels": torch.tensor([
+        0,
+        1,
+    ], dtype=torch.int64),  # 两个目标的类别
+}
+```
+
+由于每张图片中的目标数量可能不同，默认 `DataLoader` 不能直接把所有 target 堆叠起来。
+
+可以使用：
+
+```
+def detection_collate_fn(batch):
+    images = []  # 保存图片
+    targets = []  # 保存目标信息
+
+    for image, target in batch:
+        images.append(image)  # 添加图片
+        targets.append(target)  # 添加对应 target
+
+    images = torch.stack(images)  # 图片通常可以堆叠为统一批次
+
+    return images, targets  # targets 保持为 list
+```
+
+---
+
+## 13. PyTorch 目标检测数据格式
+
+以 Torchvision 的检测模型为例，训练时通常传入：
+
+```
+images = [
+    image_1,
+    image_2,
+]
+
+targets = [
+    {
+        "boxes": boxes_1,
+        "labels": labels_1,
+    },
+    {
+        "boxes": boxes_2,
+        "labels": labels_2,
+    },
+]
+```
+
+示例：
+
+```
+for images, targets in train_loader:
+    images = [
+        image.to(device)
+        for image in images
+    ]  # 将每张图片移动到设备
+
+    targets = [
+        {
+            key: value.to(device)
+            for key, value in target.items()
+        }
+        for target in targets
+    ]  # 将 boxes 和 labels 移动到设备
+
+    loss_dict = model(
+        images,
+        targets,
+    )  # 训练模式下返回各项损失
+```
+
+Torchvision 提供了 Faster R-CNN、RetinaNet、SSD、FCOS 等目标检测模型，但并不等同于 YOLO。[Torchvision 检测模型文档](https://docs.pytorch.org/vision/stable/models.html)
+
+---
+
+## 14. NMS：非极大值抑制
+
+模型可能对同一个目标预测出很多重叠框：
+
+```
+框 A：0.92
+框 B：0.86
+框 C：0.74
+```
+
+NMS 的步骤：
+
+```
+1. 按置信度从高到低排序
+2. 保留置信度最高的框
+3. 删除与它 IoU 过高的框
+4. 对剩余框重复以上过程
+```
+
+PyTorch 可以直接使用：
+
+```
+from torchvision.ops import nms  # 导入 NMS
+
+
+boxes = torch.tensor([
+    [50, 50, 200, 200],
+    [55, 55, 205, 205],
+    [300, 300, 450, 450],
+], dtype=torch.float32)  # 创建预测框
+
+scores = torch.tensor([
+    0.95,
+    0.80,
+    0.88,
+])  # 创建每个框的置信度
+
+keep_indices = nms(
+    boxes,
+    scores,
+    iou_threshold=0.5,
+)  # 删除重叠程度过高的低分框
+
+final_boxes = boxes[keep_indices]  # 获取 NMS 后保留的框
+final_scores = scores[keep_indices]  # 获取保留框对应的分数
+```
+
+通常要对每个类别分别进行 NMS：
+
+```
+cat 的框单独 NMS
+dog 的框单独 NMS
+car 的框单独 NMS
+```
+
+否则不同类别的目标可能互相错误地抑制。
+
+---
+
+## 15. YOLO 推理流程
+
+完整推理过程：
+
+```
+输入图片
+    ↓
+调整大小和标准化
+    ↓
+CNN Backbone 提取特征
+    ↓
+YOLO Head 输出预测
+    ↓
+解码 x、y、w、h
+    ↓
+计算 objectness × class score
+    ↓
+过滤低置信度框
+    ↓
+按类别执行 NMS
+    ↓
+返回最终检测结果
+```
+
+伪代码：
+
+```
+model.eval()  # 切换到评估模式
+
+with torch.inference_mode():
+    raw_predictions = model(images)  # 获取 YOLO 原始输出
+
+boxes, objectness, class_scores = decode_predictions(
+    raw_predictions
+)  # 将模型输出解码为边界框和类别分数
+
+confidence = objectness * class_scores  # 计算最终类别置信度
+
+keep = confidence > confidence_threshold  # 过滤低置信度预测框
+
+final_boxes = boxes[keep]  # 保留高置信度框
+final_scores = confidence[keep]  # 保留对应置信度
+
+keep_indices = nms(
+    final_boxes,
+    final_scores,
+    iou_threshold=0.5,
+)  # 执行 NMS
+
+final_boxes = final_boxes[keep_indices]  # 获取最终边界框
+final_scores = final_scores[keep_indices]  # 获取最终分数
+```
+
+---
+
+## 16. 目标检测中的数据增强
+
+目标检测的数据增强必须同时修改：
+
+```
+图片
+边界框
+```
+
+例如图片水平翻转时：
+
+```
+图片被翻转
+目标框的 x 坐标也必须翻转
+```
+
+不能只修改图片而不修改边界框，否则图片和标签会错位。
+
+常见增强：
+
+```
+随机水平翻转
+随机缩放
+随机裁剪
+颜色变化
+Mosaic
+MixUp
+```
+
+使用 Albumentations 时，它可以同步变换图片和边界框：
+
+```
+transform = A.Compose(
+    [
+        A.HorizontalFlip(p=0.5),
+        A.RandomBrightnessContrast(p=0.3),
+    ],
+    bbox_params=A.BboxParams(
+        format="pascal_voc",
+        label_fields=["class_labels"],
+    ),
+)  # 指定边界框格式和类别标签字段
+```
+
+---
+
+## 17. 目标检测的评价指标
+
+### IoU
+
+用于衡量预测框与真实框的重叠程度。
+
+### Precision
+
+在所有预测为目标的框中，有多少是真正正确的：
+
+```
+Precision = TP / (TP + FP)
+```
+
+### Recall
+
+在所有真实目标中，有多少被检测出来：
+
+```
+Recall = TP / (TP + FN)
+```
+
+### AP
+
+对单个类别，在不同置信度阈值下计算 Precision-Recall 曲线，并计算曲线下面积。
+
+### mAP
+
+对所有类别的 AP 取平均：
+
+```
+mAP = 所有类别 AP 的平均值
+```
+
+常见指标：
+
+```
+mAP@0.5
+mAP@0.5:0.95
+```
+
+其中：
+
+```
+mAP@0.5：
+IoU ≥ 0.5 时认为预测正确
+
+mAP@0.5:0.95：
+在多个 IoU 阈值下取平均，评价更严格
+```
+
+---
+
+## 18. 目标检测和图像分类的区别
+
+### 图像分类
+
+```
+输入：一张图片
+输出：一个类别
+```
+
+输出形状：
+
+```
+(batch_size, num_classes)
+```
+
+### 目标检测
+
+```
+输入：一张图片
+输出：多个框、多个类别和多个置信度
+```
+
+输出可以理解为：
+
+```
+每张图片：
+[
+    [x1, y1, x2, y2, score, class_id],
+    [x1, y1, x2, y2, score, class_id],
+    ...
+]
+```
+
+因此目标检测的数据集比分类数据集更复杂：
+
+```
+一张图片 → 一个标签
+```
+
+变成：
+
+```
+一张图片 → 多个边界框 + 多个类别
+```
+
+---
+
+## 19. 常见错误
+
+### 边界框格式混用
+
+需要明确使用的是：
+
+```
+xyxy
+xywh
+归一化坐标
+像素坐标
+```
+
+如果格式混用，模型可能完全无法训练。
+
+### 图像增强后没有同步修改边界框
+
+错误：
+
+```
+只翻转图片
+```
+
+正确：
+
+```
+同时翻转图片和边界框
+```
+
+### 忘记处理多个目标
+
+一张图片可能包含多个目标，不能把标签写成一个整数：
+
+```
+label = 1  # 只适合图像分类
+```
+
+检测任务需要：
+
+```
+boxes = [...]
+labels = [...]
+```
+
+### 置信度筛选过早
+
+如果置信度阈值设置过高，可能过滤掉很多正确但分数较低的框。
+
+通常需要结合：
+
+```
+confidence threshold
+NMS IoU threshold
+```
+
+一起调整。
+
+### 没有执行 NMS
+
+同一个目标可能保留很多重复框，最终检测结果会很混乱。
+
+### 只看准确率
+
+目标检测不能只看分类准确率，需要关注：
+
+```
+IoU
+Precision
+Recall
+AP
+mAP
+```
+
+---
+
+## 20. 目标检测完整流程总结
+
+```
+准备图片和边界框标签
+          ↓
+Dataset 读取 image、boxes、labels
+          ↓
+同步执行数据增强
+          ↓
+DataLoader 组成 batch
+          ↓
+YOLO Backbone 提取特征
+          ↓
+YOLO Head 预测框、objectness 和类别
+          ↓
+计算 Box、Objectness、Classification Loss
+          ↓
+反向传播更新模型
+          ↓
+推理时解码预测结果
+          ↓
+置信度筛选
+          ↓
+NMS 去除重复框
+          ↓
+计算 IoU、AP 和 mAP
+```
+
+## 21. 重点总结
+
+YOLO 的核心思想：
+
+```
+整张图片只经过一次网络，
+直接同时预测多个目标的边界框和类别。
+```
+
+一个预测结果通常包括：
+
+```
+边界框坐标
+objectness
+类别分数
+```
+
+目标检测最需要理解的几个概念：
+
+```
+Bounding Box：目标的位置
+IoU：预测框和真实框的重叠程度
+Objectness：框中是否存在目标
+NMS：删除重复预测框
+mAP：综合评价检测效果
+```
+
+总结：
+
+```
+YOLO 将目标检测转化为一个端到端的回归问题：
+模型直接从整张图片预测目标的位置、类别和置信度，
+再通过置信度筛选和 NMS 得到最终检测结果。
+```

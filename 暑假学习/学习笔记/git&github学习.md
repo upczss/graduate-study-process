@@ -981,3 +981,53 @@ git rev-parse --show-toplevel
 ```
 C:/Users/zss/OneDrive/Desktop/obsidian
 ```
+
+
+
+
+
+
+
+# 1
+
+
+以后可以在 PowerShell 中按以下步骤上传：
+
+```
+cd C:\Users\zss\OneDrive\Desktop\obsidian
+
+# 查看有哪些改动
+git status
+
+# 暂存未被 .gitignore 排除的全部改动
+git add -A
+
+# 再次确认将要提交的内容
+git status
+
+# 创建提交，引号中改成当次名称
+git commit -m "2026.8.8"
+
+# 通过本机代理上传
+git -c http.proxy=http://127.0.0.1:7897 `
+    -c http.version=HTTP/1.1 `
+    -c http.postBuffer=524288000 `
+    -c http.lowSpeedLimit=0 `
+    -c http.lowSpeedTime=999999 `
+    push origin main
+```
+
+最后检查是否同步成功：
+
+```
+git status
+git log -1 --oneline
+```
+
+如果看到：
+
+```
+## main...origin/main
+```
+
+并且没有其他修改列表，就说明本地和 GitHub 已同步。
