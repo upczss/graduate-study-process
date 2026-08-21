@@ -1015,6 +1015,12 @@ git -c http.proxy=http://127.0.0.1:7897 `
     -c http.lowSpeedLimit=0 `
     -c http.lowSpeedTime=999999 `
     push origin main
+    
+    
+    
+
+#上面一步可能不行用下面的，是一行代码
+git -c http.proxy=http://127.0.0.1:7897 -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=0 -c http.lowSpeedTime=999999 push origin main
 ```
 
 最后检查是否同步成功：
@@ -1031,3 +1037,70 @@ git log -1 --oneline
 ```
 
 并且没有其他修改列表，就说明本地和 GitHub 已同步。
+
+
+
+
+
+
+
+
+
+
+以后在 Git Bash 里按这个流程执行就行。
+
+先进入仓库：
+
+```
+cd ~/OneDrive/Desktop/obsidian
+```
+
+查看改动，确认没有不想上传的文件：
+
+```
+git status
+```
+
+暂存全部未被 `.gitignore` 排除的改动：
+
+```
+git add -A
+```
+
+再次确认本次会上传什么：
+
+```
+git status
+```
+
+创建提交，把日期改成当天：
+
+```
+git commit -m "2026.8.21"
+```
+
+开启代理后，执行上传：
+
+```
+git -c http.proxy=http://127.0.0.1:7897 -c http.version=HTTP/1.1 -c http.postBuffer=524288000 -c http.lowSpeedLimit=0 -c http.lowSpeedTime=999999 push origin main
+```
+
+最后检查：
+
+```
+git status
+git log -1 --oneline
+```
+
+如果 `git status` 显示：
+
+```
+## main...origin/main
+```
+
+且没有 `ahead 1`，就代表已成功同步到 GitHub。
+
+注意两点：
+
+- 上传命令中的 `http://127.0.0.1:7897` 必须是普通文本，不能带 `[]()`。
+- 出现 `HTTP 408` 时，不要重新 `git add` 或 `git commit`，保持代理开启后直接重复执行最后那条 `push` 命令即可。
